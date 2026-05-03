@@ -3,34 +3,60 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Register Budget Bot</title>
+    <title>Budget Bot – Create Account</title>
+    <meta name="description" content="Create your Budget Bot account – track expenses with AI in natural language." />
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body class="auth-page">
-    <main class="auth-panel">
-      <h1>Create your Budget Bot account</h1>
-      <p>Use email and password login. No external identity provider is required.</p>
-      <form class="auth-form" onsubmit="submitAuth(event, 'register')">
-        <label class="field">Name<input type="text" name="name" required autocomplete="name" /></label>
-        <label class="field">Email<input type="email" name="email" required autocomplete="email" /></label>
-        <label class="field">Password<input type="password" name="password" required minlength="8" autocomplete="new-password" /></label>
-        <button class="primary-btn" type="submit">Create account</button>
-        <div class="error" aria-live="polite"></div>
-      </form>
-      <p>Already registered? <a class="auth-link" href="/login">Login</a></p>
-    </main>
-    <section class="auth-visual">
-      <div class="visual-card">
-        <h2>Your budget history belongs to you</h2>
-        <p>Each account keeps its own conversations, extracted transactions, and analytics isolated in MongoDB.</p>
-        <div class="metric-grid">
-          <div class="metric"><strong>Private</strong><span>user data</span></div>
-          <div class="metric"><strong>Fast</strong><span>chat entry</span></div>
-          <div class="metric"><strong>Clear</strong><span>analytics</span></div>
+    <aside class="auth-brand-panel" aria-label="Budget Bot branding">
+      <div class="auth-brand-top">
+        <div class="auth-logo-row">
+          <div class="auth-logo-icon">
+            <img src="/static/assets/budget-bot-logo.svg" alt="Budget Bot" width="40" height="40" />
+          </div>
+          <div>
+            <strong class="auth-app-name">Budget Bot</strong>
+            <span class="auth-app-tagline">Your AI-powered financial assistant</span>
+          </div>
         </div>
+        <ul class="auth-features">
+          <li><span class="feature-dot"></span> Track expenses in natural language</li>
+          <li><span class="feature-dot"></span> Get smart insights and analytics</li>
+          <li><span class="feature-dot"></span> Stay on top of your budget</li>
+          <li><span class="feature-dot"></span> Secure and private</li>
+        </ul>
       </div>
-    </section>
+      <div class="auth-mascot-wrap">
+        <img src="/static/assets/robot-mascot.svg" alt="Budget Bot mascot" class="auth-mascot" />
+      </div>
+    </aside>
+
+    <main class="auth-form-panel">
+      <div class="auth-form-container">
+        <h1 id="auth-heading">Create your account</h1>
+        <p class="auth-subtitle">Sign up to start tracking with Budget Bot</p>
+
+        <form class="auth-form" onsubmit="submitAuth(event, 'register')">
+          <label class="field" for="reg-name">
+            Name
+            <input type="text" id="reg-name" name="name" required autocomplete="name" placeholder="Your full name" />
+          </label>
+          <label class="field" for="reg-email">
+            Email
+            <input type="email" id="reg-email" name="email" required autocomplete="email" placeholder="name@example.com" />
+          </label>
+          <label class="field" for="reg-password">
+            Password
+            <input type="password" id="reg-password" name="password" required minlength="8" autocomplete="new-password" placeholder="••••••••" />
+          </label>
+          <button class="primary-btn" id="register-submit-btn" type="submit">Create account</button>
+          <div class="error" aria-live="polite"></div>
+        </form>
+
+        <p class="auth-switch">Already registered? <a class="auth-link" href="/login">Login</a></p>
+      </div>
+    </main>
     <script src="/static/auth.js"></script>
   </body>
 </html>
