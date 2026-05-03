@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Register Budget Bot</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body class="auth-page">
+    <main class="auth-panel">
+      <h1>Create your Budget Bot account</h1>
+      <p>Use email and password login. No external identity provider is required.</p>
+      <form class="auth-form" onsubmit="submitAuth(event, 'register')">
+        <label class="field">Name<input type="text" name="name" required autocomplete="name" /></label>
+        <label class="field">Email<input type="email" name="email" required autocomplete="email" /></label>
+        <label class="field">Password<input type="password" name="password" required minlength="8" autocomplete="new-password" /></label>
+        <button class="primary-btn" type="submit">Create account</button>
+        <div class="error" aria-live="polite"></div>
+      </form>
+      <p>Already registered? <a class="auth-link" href="/login">Login</a></p>
+    </main>
+    <section class="auth-visual">
+      <div class="visual-card">
+        <h2>Your budget history belongs to you</h2>
+        <p>Each account keeps its own conversations, extracted transactions, and analytics isolated in MongoDB.</p>
+        <div class="metric-grid">
+          <div class="metric"><strong>Private</strong><span>user data</span></div>
+          <div class="metric"><strong>Fast</strong><span>chat entry</span></div>
+          <div class="metric"><strong>Clear</strong><span>analytics</span></div>
+        </div>
+      </div>
+    </section>
+    <script src="/static/auth.js"></script>
+  </body>
+</html>

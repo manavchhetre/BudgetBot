@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Budget Bot Login</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body class="auth-page">
+    <main class="auth-panel">
+      <h1>Budget Bot</h1>
+      <p>Sign in to track expenses through natural conversation and view your spending analytics.</p>
+      <form class="auth-form" onsubmit="submitAuth(event, 'login')">
+        <label class="field">Email<input type="email" name="email" required autocomplete="email" /></label>
+        <label class="field">Password<input type="password" name="password" required autocomplete="current-password" /></label>
+        <button class="primary-btn" type="submit">Login</button>
+        <div class="error" aria-live="polite"></div>
+      </form>
+      <p>New here? <a class="auth-link" href="/register">Create an account</a></p>
+    </main>
+    <section class="auth-visual">
+      <div class="visual-card">
+        <h2>Spend tracking without forms</h2>
+        <p>Type expenses in plain language, let the bot structure them, and review your budget history from one place.</p>
+        <div class="metric-grid">
+          <div class="metric"><strong>Chat</strong><span>expense capture</span></div>
+          <div class="metric"><strong>Mongo</strong><span>history store</span></div>
+          <div class="metric"><strong>AI</strong><span>summaries</span></div>
+        </div>
+      </div>
+    </section>
+    <script src="/static/auth.js"></script>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.log
+.pytest_cache/
+.playwright-mcp/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.env
+.venv/
+venv/
+node_modules/
+dist/
+build/

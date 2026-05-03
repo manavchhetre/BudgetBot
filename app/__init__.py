@@ -1,0 +1,1 @@
+"""Budget Bot application package."""

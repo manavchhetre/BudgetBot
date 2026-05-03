@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Budget Bot</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="rail" aria-label="Primary navigation">
+        <div class="rail-brand">
+          <img class="logo-mark" src="/static/assets/budget-bot-logo.svg" alt="Budget Bot logo" />
+          <strong>Budget Bot</strong>
+        </div>
+        <nav class="rail-nav">
+          <button class="rail-button active" id="newChatBtn" title="Chat" aria-label="Chat"><span>+</span><strong>Chat</strong></button>
+          <button class="rail-button" id="analyticsBtn" title="Analytics" aria-label="Analytics"><span>A</span><strong>Analytics</strong></button>
+          <button class="rail-button" id="historyBtn" title="History" aria-label="History"><span>H</span><strong>History</strong></button>
+          <button class="rail-button" title="Budgets" aria-label="Budgets"><span>B</span><strong>Budgets</strong></button>
+          <button class="rail-button" title="Settings" aria-label="Settings"><span>S</span><strong>Settings</strong></button>
+        </nav>
+        <div class="rail-footer">
+          <div class="user-badge" id="userInitial">U</div>
+          <span id="railUserName">User</span>
+        </div>
+      </aside>
+      <header class="topbar">
+        <div class="brand">
+          <h1>Hey <span id="headerName">there</span>!</h1>
+          <p>I am here to help you track expenses and manage your money.</p>
+        </div>
+        <div class="user-area">
+          <span id="userName"></span>
+          <button class="ghost-btn" id="logoutBtn">Logout</button>
+        </div>
+      </header>
+      <main class="main">
+        <section class="welcome">
+          <div class="chat-log" id="chatLog"></div>
+          <form class="composer" id="chatForm">
+            <div class="composer-row">
+              <textarea id="messageInput" rows="1" placeholder="Type an expense or ask anything..." required></textarea>
+              <button class="icon-btn" id="sendBtn" type="button" aria-label="Send message">Send</button>
+            </div>
+            <div class="quick-actions">
+              <button type="button" data-prompt="I spent 200 rupees on groceries today">Add Expense</button>
+              <button type="button" data-prompt="Show this week">Show This Week</button>
+              <button type="button" data-prompt="Top categories">Top Categories</button>
+              <button type="button" data-prompt="Show my budgets">My Budgets</button>
+            </div>
+          </form>
+        </section>
+        <section class="suggestions">
+          <p class="section-label">START WITH</p>
+          <div class="suggestion-list">
+            <button class="suggestion" data-prompt="I spent 450 rupees on lunch at Cafe Coffee Day today">
+              <span class="dot"></span> I spent 450 rupees on lunch at Cafe Coffee Day today
+            </button>
+            <button class="suggestion" data-prompt="Show me my date-wise spending">
+              <span class="dot"></span> Show me my date-wise spending
+            </button>
+            <button class="suggestion" data-prompt="Where did I spend the most this month?">
+              <span class="dot"></span> Where did I spend the most this month?
+            </button>
+          </div>
+        </section>
+      </main>
+      <aside class="side-panel">
+        <section class="panel-section">
+          <div class="panel-heading">
+            <h2>Overview</h2>
+            <span>This Week</span>
+          </div>
+          <div id="analytics"></div>
+        </section>
+        <section class="panel-section insight-panel">
+          <p class="section-label">INSIGHTS</p>
+          <p class="muted">Ask Budget Bot for weekly summaries, top categories, or budget recommendations.</p>
+        </section>
+        <section class="panel-section">
+          <p class="section-label">DATE-WISE SPEND</p>
+          <div class="breakdown-list" id="dailyBreakdown"></div>
+        </section>
+        <section class="panel-section">
+          <p class="section-label">RECENT TRANSACTIONS</p>
+          <div class="transaction-list" id="transactions"></div>
+        </section>
+        <section class="panel-section">
+          <p class="section-label">CONVERSATIONS</p>
+          <div class="conversation-list" id="conversations"></div>
+        </section>
+      </aside>
+      <nav class="mobile-nav" aria-label="Mobile navigation">
+        <button id="mobileChatBtn">Chat</button>
+        <button id="mobileAnalyticsBtn">Analytics</button>
+        <button id="mobileHistoryBtn">History</button>
+      </nav>
+    </div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
