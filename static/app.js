@@ -1,28 +1,76 @@
+/* ── Jerry – app.js ── */
 const state = {
   user: null,
   conversationId: null,
   isStreaming: false,
+  currentPage: "chat",
 };
 
+/* ── DOM refs ── */
 const chatLog = document.querySelector("#chatLog");
 const messageInput = document.querySelector("#messageInput");
 const conversationsEl = document.querySelector("#conversations");
 const analyticsEl = document.querySelector("#analytics");
 const dailyBreakdownEl = document.querySelector("#dailyBreakdown");
 const transactionsEl = document.querySelector("#transactions");
-const userNameEl = document.querySelector("#userName");
-const welcomeNameEl = document.querySelector("#welcomeName");
 const headerNameEl = document.querySelector("#headerName");
 const railUserNameEl = document.querySelector("#railUserName");
 const userInitialEl = document.querySelector("#userInitial");
-const newChatBtn = document.querySelector("#newChatBtn");
-const historyBtn = document.querySelector("#historyBtn");
-const analyticsBtn = document.querySelector("#analyticsBtn");
+const userNameEl = document.querySelector("#userName");
 const sendBtn = document.querySelector("#sendBtn");
-const mobileChatBtn = document.querySelector("#mobileChatBtn");
-const mobileAnalyticsBtn = document.querySelector("#mobileAnalyticsBtn");
-const mobileHistoryBtn = document.querySelector("#mobileHistoryBtn");
+const pageTitleEl = document.querySelector("#pageTitle");
+const pageSubtitleEl = document.querySelector("#pageSubtitle");
 
+/* ── Page routing ── */
+const pageMeta = {
+  chat:      { title: (n) => `👋 Hey ${n}!`, sub: "I'm Jerry, here to help you track expenses and manage your money." },
+  analytics: { title: () => "📊 Analytics",  sub: "Your spending overview and insights." },
+  history:   { title: () => "🕐 History",    sub: "Your recent transactions and conversations." },
+  budgets:   { title: () => "💰 Budgets",    sub: "Manage your monthly budgets." },
+  settings:  { title: () => "⚙️ Settings",   sub: "Configure your Jerry experience." },
+};
+
+function switchPage(page) {
+  state.currentPage = page;
+
+  /* Toggle visibility */
+  document.querySelectorAll(".page-content").forEach((el) => {
+    el.classList.toggle("hidden", el.id !== `page-${page}`);
+  });
+
+  /* Update sidebar active state */
+  document.querySelectorAll(".rail-button").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.page === page);
+  });
+
+  /* Update mobile nav */
+  document.querySelectorAll(".mobile-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.page === page);
+  });
+
+  /* Update topbar */
+  const meta = pageMeta[page];
+  if (meta) {
+    const name = state.user ? state.user.name : "there";
+    pageTitleEl.innerHTML = meta.title(name);
+    pageSubtitleEl.textContent = meta.sub;
+  }
+
+  /* Lazy-load data for pages */
+  if (page === "analytics") {
+    loadAnalytics();
+  } else if (page === "history") {
+    loadConversations();
+    loadTransactions();
+  }
+}
+
+/* Wire up all nav buttons */
+document.querySelectorAll("[data-page]").forEach((btn) => {
+  btn.addEventListener("click", () => switchPage(btn.dataset.page));
+});
+
+/* ── API helper ── */
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
@@ -39,6 +87,7 @@ async function api(path, options = {}) {
   return response.json();
 }
 
+/* ── Text helpers ── */
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -70,27 +119,20 @@ function renderMarkdown(markdown) {
 
   while (index < lines.length) {
     const line = lines[index].trim();
-    if (!line) {
-      index += 1;
-      continue;
-    }
+    if (!line) { index += 1; continue; }
 
     if (isTableBlock(lines, index)) {
-      const headers = lines[index].split("|").map((cell) => cell.trim()).filter(Boolean);
+      const headers = lines[index].split("|").map((c) => c.trim()).filter(Boolean);
       index += 2;
       const rows = [];
       while (index < lines.length && lines[index].includes("|") && lines[index].trim()) {
-        rows.push(lines[index].split("|").map((cell) => cell.trim()).filter(Boolean));
+        rows.push(lines[index].split("|").map((c) => c.trim()).filter(Boolean));
         index += 1;
       }
-      html.push("<div class=\"markdown-table-wrap\"><table class=\"markdown-table\"><thead><tr>");
-      headers.forEach((header) => html.push(`<th>${formatInlineMarkdown(header)}</th>`));
+      html.push('<div class="markdown-table-wrap"><table class="markdown-table"><thead><tr>');
+      headers.forEach((h) => html.push(`<th>${formatInlineMarkdown(h)}</th>`));
       html.push("</tr></thead><tbody>");
-      rows.forEach((row) => {
-        html.push("<tr>");
-        row.forEach((cell) => html.push(`<td>${formatInlineMarkdown(cell)}</td>`));
-        html.push("</tr>");
-      });
+      rows.forEach((r) => { html.push("<tr>"); r.forEach((c) => html.push(`<td>${formatInlineMarkdown(c)}</td>`)); html.push("</tr>"); });
       html.push("</tbody></table></div>");
       continue;
     }
@@ -113,7 +155,6 @@ function renderMarkdown(markdown) {
     else html.push(`<p>${formatInlineMarkdown(line)}</p>`);
     index += 1;
   }
-
   return html.join("");
 }
 
@@ -125,6 +166,7 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
 }
 
+/* ── Chat ── */
 function addMessage(role, content = "") {
   const message = document.createElement("div");
   message.className = `message ${role}`;
@@ -157,13 +199,8 @@ async function sendMessage(text) {
       body: JSON.stringify({ message, conversation_id: state.conversationId }),
     });
 
-    if (response.status === 401) {
-      window.location.href = "/login";
-      return;
-    }
-    if (!response.ok || !response.body) {
-      throw new Error("Chat request failed");
-    }
+    if (response.status === 401) { window.location.href = "/login"; return; }
+    if (!response.ok || !response.body) throw new Error("Chat request failed");
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -178,17 +215,13 @@ async function sendMessage(text) {
       for (const line of lines) {
         if (!line.trim()) continue;
         const event = JSON.parse(line);
-        if (event.type === "meta") {
-          state.conversationId = event.conversation_id;
-        }
+        if (event.type === "meta") state.conversationId = event.conversation_id;
         if (event.type === "chunk") {
           rawAssistantText += event.text;
           updateAssistantMessage(assistantMessage, rawAssistantText);
         }
       }
     }
-
-    await Promise.all([loadConversations(), loadAnalytics(), loadTransactions()]);
   } catch (error) {
     updateAssistantMessage(assistantMessage, error.message);
   } finally {
@@ -196,14 +229,15 @@ async function sendMessage(text) {
   }
 }
 
+/* ── Data loaders ── */
 async function loadMe() {
   state.user = await api("/api/me");
   if (!state.user) return;
-  userNameEl.textContent = state.user.name;
-  if (welcomeNameEl) welcomeNameEl.textContent = state.user.name;
-  headerNameEl.textContent = state.user.name;
-  railUserNameEl.textContent = state.user.name;
-  userInitialEl.textContent = state.user.name.slice(0, 1).toUpperCase();
+  const name = state.user.name;
+  userNameEl.textContent = name;
+  headerNameEl.textContent = name;
+  railUserNameEl.textContent = name;
+  userInitialEl.textContent = name.slice(0, 1).toUpperCase();
 }
 
 async function loadConversations() {
@@ -220,9 +254,10 @@ async function loadConversations() {
     button.textContent = conversation.title;
     button.addEventListener("click", async () => {
       state.conversationId = conversation.id;
-      document.querySelectorAll(".conversation-item").forEach((item) => item.classList.remove("active"));
+      document.querySelectorAll(".conversation-item").forEach((i) => i.classList.remove("active"));
       button.classList.add("active");
       await loadConversationMessages(conversation.id);
+      switchPage("chat");
     });
     conversationsEl.appendChild(button);
   });
@@ -232,8 +267,7 @@ async function loadConversationMessages(conversationId) {
   const messages = await api(`/api/conversations/${conversationId}/messages`);
   if (!messages) return;
   chatLog.innerHTML = "";
-  messages.forEach((message) => addMessage(message.role, message.content));
-  document.querySelector(".main").scrollTo({ top: 0, behavior: "smooth" });
+  messages.forEach((m) => addMessage(m.role, m.content));
 }
 
 async function loadAnalytics() {
@@ -245,29 +279,22 @@ async function loadAnalytics() {
       <div class="metric"><strong>${summary.transaction_count}</strong><span>Transactions</span></div>
       <div class="metric"><strong>${summary.top_category || "-"}</strong><span>Top category</span></div>
     </div>
-    <div class="panel-section">
+    <div style="margin-top:16px">
       <p class="section-label">CATEGORY BREAKDOWN</p>
       <div class="breakdown-list">
-        ${
-          summary.category_breakdown.length
-            ? summary.category_breakdown
-                .map(
-                  (item) =>
-                    `<div class="breakdown-item"><span>${escapeHtml(item.category)}</span><strong>${formatMoney(item.amount)}</strong></div>`,
-                )
-                .join("")
-            : `<p class="muted">No spend recorded yet.</p>`
+        ${summary.category_breakdown.length
+          ? summary.category_breakdown.map((i) =>
+              `<div class="breakdown-item"><span>${escapeHtml(i.category)}</span><strong>${formatMoney(i.amount)}</strong></div>`
+            ).join("")
+          : `<p class="muted">No spend recorded yet.</p>`
         }
       </div>
     </div>
   `;
   dailyBreakdownEl.innerHTML = summary.daily_breakdown.length
-    ? summary.daily_breakdown
-        .map(
-          (item) =>
-            `<div class="breakdown-item date-row"><span>${formatDate(item.date)}</span><strong>${formatMoney(item.amount)}</strong></div>`,
-        )
-        .join("")
+    ? summary.daily_breakdown.map((i) =>
+        `<div class="breakdown-item date-row"><span>${formatDate(i.date)}</span><strong>${formatMoney(i.amount)}</strong></div>`
+      ).join("")
     : `<p class="muted">No date-wise spend yet.</p>`;
 }
 
@@ -279,12 +306,12 @@ async function loadTransactions() {
     transactionsEl.innerHTML = `<p class="muted">Add an expense to see it here.</p>`;
     return;
   }
-  transactions.slice(0, 6).forEach((transaction) => {
+  transactions.slice(0, 10).forEach((t) => {
     const row = document.createElement("div");
     row.className = "transaction-item";
     row.innerHTML = `
-      <span><strong>${escapeHtml(transaction.merchant)}</strong><br><span class="muted">${escapeHtml(transaction.category)} - ${formatDate(transaction.date)}</span></span>
-      <strong>${formatMoney(transaction.amount, transaction.currency)}</strong>
+      <span><strong>${escapeHtml(t.merchant)}</strong><br><span class="muted">${escapeHtml(t.category)} · ${formatDate(t.date)}</span></span>
+      <strong>${formatMoney(t.amount, t.currency)}</strong>
     `;
     transactionsEl.appendChild(row);
   });
@@ -295,50 +322,28 @@ async function logout() {
   window.location.href = "/login";
 }
 
-document.querySelector("#chatForm").addEventListener("submit", (event) => {
-  event.preventDefault();
+/* ── Event listeners ── */
+document.querySelector("#chatForm").addEventListener("submit", (e) => {
+  e.preventDefault();
   sendMessage(messageInput.value);
 });
 
 sendBtn.addEventListener("click", () => sendMessage(messageInput.value));
 
-messageInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && !event.shiftKey) {
-    event.preventDefault();
+messageInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
     sendMessage(messageInput.value);
   }
 });
 
-document.querySelectorAll(".suggestion").forEach((button) => {
-  button.addEventListener("click", () => sendMessage(button.dataset.prompt));
+document.querySelectorAll(".quick-actions button").forEach((btn) => {
+  btn.addEventListener("click", () => sendMessage(btn.dataset.prompt));
 });
-
-document.querySelectorAll(".quick-actions button").forEach((button) => {
-  button.addEventListener("click", () => sendMessage(button.dataset.prompt));
-});
-
-newChatBtn.addEventListener("click", () => {
-  state.conversationId = null;
-  chatLog.innerHTML = "";
-  messageInput.focus();
-});
-
-historyBtn.addEventListener("click", () => {
-  document.querySelector("#conversations").scrollIntoView({ behavior: "smooth", block: "center" });
-});
-
-analyticsBtn.addEventListener("click", () => {
-  document.querySelector("#analytics").scrollIntoView({ behavior: "smooth", block: "start" });
-});
-
-mobileChatBtn.addEventListener("click", () => messageInput.focus());
-mobileAnalyticsBtn.addEventListener("click", () => document.querySelector("#analytics").scrollIntoView({ behavior: "smooth" }));
-mobileHistoryBtn.addEventListener("click", () => document.querySelector("#conversations").scrollIntoView({ behavior: "smooth" }));
 
 document.querySelector("#logoutBtn").addEventListener("click", logout);
 
+/* ── Init ── */
 loadMe()
-  .then(() => Promise.all([loadConversations(), loadAnalytics(), loadTransactions()]))
-  .catch(() => {
-    window.location.href = "/login";
-  });
+  .then(() => Promise.all([loadAnalytics(), loadTransactions(), loadConversations()]))
+  .catch(() => { window.location.href = "/login"; });
