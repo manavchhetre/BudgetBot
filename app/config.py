@@ -1,14 +1,22 @@
+import logging
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+logger = logging.getLogger("jerry")
+
 
 class Settings(BaseSettings):
+    debug: bool = False
+
     mongodb_uri: str = "mongodb://localhost:27017"
     mongodb_db_name: str = "budget_bot"
     session_secret: str = "change-me-in-production"
     app_timezone: str = "Asia/Kolkata"
     web_search_enabled: bool = True
+
+    allowed_origins: str = ""
+    sentry_dsn: str = ""
 
     llm_provider: str = "openai"
     llm_fallback_providers: str = ""
@@ -31,6 +39,25 @@ class Settings(BaseSettings):
             for provider in self.llm_fallback_providers.split(",")
             if provider.strip()
         ]
+
+    @property
+    def allowed_origin_list(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.allowed_origins.split(",")
+            if origin.strip()
+        ]
+
+    def validate_for_production(self) -> None:
+        """Log warnings for insecure defaults. Called at startup."""
+        if self.session_secret == "change-me-in-production":
+            if self.debug:
+                logger.warning("Using default SESSION_SECRET — acceptable for local dev only")
+            else:
+                logger.critical(
+                    "SESSION_SECRET is still the default value! "
+                    "Set a strong random secret: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
+                )
 
 
 @lru_cache

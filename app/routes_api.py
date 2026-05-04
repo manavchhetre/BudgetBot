@@ -1,8 +1,9 @@
-from typing import Annotated
 import asyncio
 import json
+import logging
+from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
 from app.agent import BudgetAgent
@@ -10,10 +11,12 @@ from app.budget_parser import BudgetTextInterpreter
 from app.categorization import MerchantCategorizer
 from app.config import Settings, get_settings
 from app.dependencies import get_repository, require_user
+from app.rate_limit import limiter
 from app.models import AnalyticsSummary, ChatRequest, ChatResponse, TransactionPublic
 from app.providers import build_provider_chain
 from app.repositories import BudgetRepository
 
+logger = logging.getLogger("jerry.api")
 
 router = APIRouter(prefix="/api")
 
@@ -45,20 +48,27 @@ async def conversation_messages(
 
 
 @router.post("/chat", response_model=ChatResponse)
+@limiter.limit("30/minute")
 async def chat(
+    request: Request,
     payload: ChatRequest,
     user: Annotated[dict, Depends(require_user)],
     agent: Annotated[BudgetAgent, Depends(get_agent)],
 ) -> ChatResponse:
+    logger.info("Chat from user %s: %.60s…", user["id"], payload.message)
     return await agent.handle_message(user["id"], payload.message, payload.conversation_id)
 
 
 @router.post("/chat/stream")
+@limiter.limit("30/minute")
 async def chat_stream(
+    request: Request,
     payload: ChatRequest,
     user: Annotated[dict, Depends(require_user)],
     agent: Annotated[BudgetAgent, Depends(get_agent)],
 ) -> StreamingResponse:
+    logger.info("Stream chat from user %s: %.60s…", user["id"], payload.message)
+
     async def event_stream():
         response = await agent.handle_message(user["id"], payload.message, payload.conversation_id)
         yield json.dumps(
@@ -94,3 +104,4 @@ async def transactions(
     repository: Annotated[BudgetRepository, Depends(get_repository)],
 ) -> list[TransactionPublic]:
     return [TransactionPublic(**item) for item in await repository.get_transactions(user["id"])]
+
