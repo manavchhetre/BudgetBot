@@ -14,6 +14,10 @@ class BudgetTextInterpreter:
         self.categorizer = categorizer or MerchantCategorizer()
 
     async def classify_intent(self, message: str) -> Intent:
+        lowered = message.strip().lower()
+        if lowered in ["hi", "hello", "hey", "yo", "greetings", "hi there", "hello there", "hey jerry", "hi jerry"]:
+            return Intent.general_chat
+
         system_prompt = (
             f"{current_date_context()}\n"
             "Classify a personal budgeting chatbot message. Return JSON only with key intent. "
@@ -50,6 +54,7 @@ class BudgetTextInterpreter:
         history: list[dict[str, Any]],
         transactions: list[dict[str, Any]],
         summary: dict[str, Any],
+        user_profile: dict[str, Any],
     ) -> str:
         system_prompt = (
             f"{current_date_context()}\n"
@@ -61,7 +66,18 @@ class BudgetTextInterpreter:
             f"- {item['date'].date().isoformat()}: {item['currency']} {item['amount']} at {item['merchant']} ({item['category']})"
             for item in transactions[:20]
         )
+        
+        income = user_profile.get("monthly_income")
+        remaining = summary.get("remaining_budget")
+        user_summary = user_profile.get("user_summary")
+        
+        financial_context = f"Monthly Income: {income if income else 'Not set'}"
+        if remaining is not None:
+            financial_context += f"\nRemaining Budget this month: {remaining}"
+            
         prompt = (
+            f"User Profile Summary:\n{user_summary or 'No additional context.'}\n\n"
+            f"Financial Context:\n{financial_context}\n\n"
             f"Spending summary: {summary}\n\nRecent expenses:\n{expense_lines or 'No expenses yet.'}\n\n"
             f"Conversation:\n{transcript}\n\nUser message:\n{message}"
         )
@@ -69,6 +85,20 @@ class BudgetTextInterpreter:
             return await self.provider_chain.complete_text(system_prompt, prompt)
         except ProviderUnavailableError:
             return "I can track expenses and summarize your spending. Try: 'I spent 450 on lunch at Cafe Coffee Day'."
+
+    async def update_user_summary(self, current_summary: str | None, message: str) -> str:
+        system_prompt = (
+            "You are a background agent responsible for maintaining a concise, long-term summary of the user's "
+            "financial situation, goals, and personal details. You will be given the current summary and a new message. "
+            "Update the summary with any new important facts. Keep it under 3 sentences. "
+            "Do NOT include transient details like a single purchase of coffee. "
+            "Do include things like: user is saving for a house, user has a dog, user works as a developer."
+        )
+        prompt = f"Current summary:\n{current_summary or 'None'}\n\nNew message:\n{message}"
+        try:
+            return await self.provider_chain.complete_text(system_prompt, prompt)
+        except Exception:
+            return current_summary or ""
 
     def _classify_with_rules(self, message: str) -> Intent:
         lowered = message.lower()

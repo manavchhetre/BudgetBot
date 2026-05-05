@@ -30,6 +30,7 @@ class BudgetRepository(Protocol):
     async def create_user(self, name: str, email: str, password_hash: str) -> dict[str, Any]: ...
     async def get_user_by_email(self, email: str) -> dict[str, Any] | None: ...
     async def get_user_by_id(self, user_id: str) -> dict[str, Any] | None: ...
+    async def update_user_profile(self, user_id: str, name: str | None = None, avatar: str | None = None, monthly_income: float | None = None, user_summary: str | None = None) -> None: ...
     async def create_conversation(self, user_id: str, title: str) -> dict[str, Any]: ...
     async def get_conversations(self, user_id: str) -> list[dict[str, Any]]: ...
     async def add_message(self, user_id: str, conversation_id: str, role: str, content: str) -> dict[str, Any]: ...
@@ -55,6 +56,9 @@ class MongoBudgetRepository:
             "name": name.strip(),
             "email": email.lower(),
             "password_hash": password_hash,
+            "avatar": "",
+            "monthly_income": 0.0,
+            "user_summary": "",
             "created_at": now,
         }
         result = await self.db.users.insert_one(document)
@@ -70,6 +74,21 @@ class MongoBudgetRepository:
             return None
         document = await self.db.users.find_one({"_id": ObjectId(user_id)})
         return serialize_id(document) if document else None
+
+    async def update_user_profile(self, user_id: str, name: str | None = None, avatar: str | None = None, monthly_income: float | None = None, user_summary: str | None = None) -> None:
+        if not ObjectId.is_valid(user_id):
+            return
+        update_fields = {}
+        if name is not None:
+            update_fields["name"] = name
+        if avatar is not None:
+            update_fields["avatar"] = avatar
+        if monthly_income is not None:
+            update_fields["monthly_income"] = monthly_income
+        if user_summary is not None:
+            update_fields["user_summary"] = user_summary
+        if update_fields:
+            await self.db.users.update_one({"_id": ObjectId(user_id)}, {"$set": update_fields})
 
     async def create_conversation(self, user_id: str, title: str) -> dict[str, Any]:
         now = datetime.now(UTC)
@@ -134,6 +153,9 @@ class MongoBudgetRepository:
 
     async def analytics_summary(self, user_id: str) -> dict[str, Any]:
         object_user_id = ObjectId(user_id)
+        user = await self.get_user_by_id(user_id)
+        monthly_income = user.get("monthly_income") if user else None
+
         transactions = await self.get_transactions(user_id, limit=500)
         total_spend = sum(float(item["amount"]) for item in transactions)
 
@@ -154,8 +176,15 @@ class MongoBudgetRepository:
 
         top_category = max(category_totals, key=category_totals.get) if category_totals else None
         top_merchant = max(merchant_totals, key=merchant_totals.get) if merchant_totals else None
+        
+        current_month = datetime.now(UTC).strftime("%Y-%m")
+        spend_this_month = monthly_totals.get(current_month, 0.0)
+        remaining_budget = (monthly_income - spend_this_month) if monthly_income else None
+
         return {
             "total_spend": total_spend,
+            "monthly_income": monthly_income,
+            "remaining_budget": remaining_budget,
             "transaction_count": await self.db.transactions.count_documents({"user_id": object_user_id}),
             "top_category": top_category,
             "top_merchant": top_merchant,

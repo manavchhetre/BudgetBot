@@ -26,6 +26,15 @@ class UserPublic(BaseModel):
     id: str
     name: str
     email: EmailStr
+    avatar: str | None = None
+    monthly_income: float | None = None
+    user_summary: str | None = None
+
+
+class UserProfileUpdate(BaseModel):
+    name: str | None = None
+    avatar: str | None = None
+    monthly_income: float | None = None
 
 
 class ChatRequest(BaseModel):
@@ -77,6 +86,8 @@ class TransactionPublic(BaseModel):
 
 class AnalyticsSummary(BaseModel):
     total_spend: float
+    monthly_income: float | None = None
+    remaining_budget: float | None = None
     transaction_count: int
     top_category: str | None
     top_merchant: str | None

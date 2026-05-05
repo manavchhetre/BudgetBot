@@ -6,6 +6,14 @@ const state = {
   currentPage: "chat",
 };
 
+/* ── Init Theme & Sidebar ── */
+const savedTheme = localStorage.getItem("jerry_theme") || "light";
+if (savedTheme === "dark") document.documentElement.setAttribute("data-theme", "dark");
+const savedSidebar = localStorage.getItem("jerry_sidebar");
+if (savedSidebar === "collapsed" && document.querySelector(".app-shell")) {
+  document.querySelector(".app-shell").classList.add("sidebar-collapsed");
+}
+
 /* ── DOM refs ── */
 const chatLog = document.querySelector("#chatLog");
 const messageInput = document.querySelector("#messageInput");
@@ -166,20 +174,38 @@ function formatDate(value) {
   return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
 }
 
+function formatTime(value) {
+  return new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "numeric", hour12: true }).format(new Date(value));
+}
+
 /* ── Chat ── */
-function addMessage(role, content = "") {
-  const message = document.createElement("div");
-  message.className = `message ${role}`;
-  message.dataset.raw = content;
-  message.innerHTML = role === "assistant" ? renderMarkdown(content) : escapeHtml(content);
-  chatLog.appendChild(message);
-  message.scrollIntoView({ behavior: "smooth", block: "end" });
-  return message;
+function addMessage(role, content = "", timestamp = null) {
+  const messageWrap = document.createElement("div");
+  messageWrap.className = `message ${role}`;
+  messageWrap.dataset.raw = content;
+  
+  const contentDiv = document.createElement("div");
+  contentDiv.className = "msg-content";
+  contentDiv.innerHTML = role === "assistant" ? renderMarkdown(content) : escapeHtml(content);
+  messageWrap.appendChild(contentDiv);
+
+  if (timestamp) {
+    const timeDiv = document.createElement("div");
+    timeDiv.className = "msg-timestamp";
+    timeDiv.textContent = formatTime(timestamp);
+    messageWrap.appendChild(timeDiv);
+  }
+
+  chatLog.appendChild(messageWrap);
+  messageWrap.scrollIntoView({ behavior: "smooth", block: "end" });
+  return messageWrap;
 }
 
 function updateAssistantMessage(element, content) {
   element.dataset.raw = content;
-  element.innerHTML = renderMarkdown(content);
+  const contentDiv = element.querySelector(".msg-content");
+  if (contentDiv) contentDiv.innerHTML = renderMarkdown(content);
+  else element.innerHTML = renderMarkdown(content);
   element.scrollIntoView({ behavior: "smooth", block: "end" });
 }
 
@@ -188,8 +214,15 @@ async function sendMessage(text) {
   if (!message || state.isStreaming) return;
   state.isStreaming = true;
   messageInput.value = "";
-  addMessage("user", message);
-  const assistantMessage = addMessage("assistant", "");
+  addMessage("user", message, Date.now());
+  
+  const typingElement = document.createElement("div");
+  typingElement.className = "message assistant typing-indicator";
+  typingElement.innerHTML = `<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>`;
+  chatLog.appendChild(typingElement);
+  typingElement.scrollIntoView({ behavior: "smooth", block: "end" });
+
+  let assistantMessage = null;
   let rawAssistantText = "";
 
   try {
@@ -209,6 +242,9 @@ async function sendMessage(text) {
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
+      if (typingElement.parentNode) typingElement.remove();
+      if (!assistantMessage) assistantMessage = addMessage("assistant", "", Date.now());
+
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
@@ -223,6 +259,8 @@ async function sendMessage(text) {
       }
     }
   } catch (error) {
+    if (typingElement.parentNode) typingElement.remove();
+    if (!assistantMessage) assistantMessage = addMessage("assistant", "", Date.now());
     updateAssistantMessage(assistantMessage, error.message);
   } finally {
     state.isStreaming = false;
@@ -234,10 +272,20 @@ async function loadMe() {
   state.user = await api("/api/me");
   if (!state.user) return;
   const name = state.user.name;
+  const avatar = state.user.avatar;
   userNameEl.textContent = name;
   headerNameEl.textContent = name;
   railUserNameEl.textContent = name;
-  userInitialEl.textContent = name.slice(0, 1).toUpperCase();
+  userInitialEl.textContent = avatar ? avatar : name.slice(0, 1).toUpperCase();
+
+  const nameInput = document.querySelector("#nameInput");
+  if (nameInput) nameInput.value = name;
+  const avatarInput = document.querySelector("#avatarInput");
+  if (avatarInput) avatarInput.value = avatar || "";
+  const incomeInput = document.querySelector("#monthlyIncomeInput");
+  if (incomeInput) incomeInput.value = state.user.monthly_income || "";
+  const themeSelect = document.querySelector("#themeSelect");
+  if (themeSelect) themeSelect.value = localStorage.getItem("jerry_theme") || "light";
 }
 
 async function loadConversations() {
@@ -267,7 +315,7 @@ async function loadConversationMessages(conversationId) {
   const messages = await api(`/api/conversations/${conversationId}/messages`);
   if (!messages) return;
   chatLog.innerHTML = "";
-  messages.forEach((m) => addMessage(m.role, m.content));
+  messages.forEach((m) => addMessage(m.role, m.content, m.created_at));
 }
 
 async function loadAnalytics() {
@@ -342,6 +390,49 @@ document.querySelectorAll(".quick-actions button").forEach((btn) => {
 });
 
 document.querySelector("#logoutBtn").addEventListener("click", logout);
+
+const railToggle = document.querySelector("#railToggle");
+if (railToggle) {
+  railToggle.addEventListener("click", () => {
+    const shell = document.querySelector(".app-shell");
+    shell.classList.toggle("sidebar-collapsed");
+    localStorage.setItem("jerry_sidebar", shell.classList.contains("sidebar-collapsed") ? "collapsed" : "expanded");
+  });
+}
+
+const settingsForm = document.querySelector("#settingsForm");
+if (settingsForm) {
+  settingsForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = document.querySelector("#saveSettingsBtn");
+    const msg = document.querySelector("#settingsMsg");
+    btn.textContent = "Saving...";
+    
+    const theme = document.querySelector("#themeSelect").value;
+    localStorage.setItem("jerry_theme", theme);
+    if (theme === "dark") document.documentElement.setAttribute("data-theme", "dark");
+    else document.documentElement.removeAttribute("data-theme");
+
+    const payload = {
+      name: document.querySelector("#nameInput").value,
+      avatar: document.querySelector("#avatarInput").value,
+      monthly_income: parseFloat(document.querySelector("#monthlyIncomeInput").value) || null
+    };
+
+    try {
+      await api("/api/user/profile", { method: "PUT", body: JSON.stringify(payload) });
+      msg.textContent = "Settings saved!";
+      msg.style.color = "var(--green)";
+      await loadMe();
+    } catch (err) {
+      msg.textContent = "Failed to save.";
+      msg.style.color = "var(--danger)";
+    } finally {
+      btn.textContent = "Save Settings";
+      setTimeout(() => msg.textContent = "", 3000);
+    }
+  });
+}
 
 /* ── Init ── */
 loadMe()

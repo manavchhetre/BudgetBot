@@ -3,7 +3,7 @@ import json
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
 
 from app.agent import BudgetAgent
@@ -12,7 +12,7 @@ from app.categorization import MerchantCategorizer
 from app.config import Settings, get_settings
 from app.dependencies import get_repository, require_user
 from app.rate_limit import limiter
-from app.models import AnalyticsSummary, ChatRequest, ChatResponse, TransactionPublic
+from app.models import AnalyticsSummary, ChatRequest, ChatResponse, TransactionPublic, UserIncomeUpdate
 from app.providers import build_provider_chain
 from app.repositories import BudgetRepository
 
@@ -28,6 +28,15 @@ def get_agent(
     provider_chain = build_provider_chain(settings)
     categorizer = MerchantCategorizer(web_search_enabled=settings.web_search_enabled)
     return BudgetAgent(repository, BudgetTextInterpreter(provider_chain, categorizer))
+
+async def run_summary_agent(user_id: str, message: str, agent: BudgetAgent):
+    user_profile = await agent.repository.get_user_by_id(user_id)
+    if not user_profile:
+        return
+    current_summary = user_profile.get("user_summary")
+    new_summary = await agent.interpreter.update_user_summary(current_summary, message)
+    if new_summary != current_summary:
+        await agent.repository.update_user_profile(user_id, user_summary=new_summary)
 
 
 @router.get("/conversations")
@@ -52,11 +61,14 @@ async def conversation_messages(
 async def chat(
     request: Request,
     payload: ChatRequest,
+    background_tasks: BackgroundTasks,
     user: Annotated[dict, Depends(require_user)],
     agent: Annotated[BudgetAgent, Depends(get_agent)],
 ) -> ChatResponse:
     logger.info("Chat from user %s: %.60s…", user["id"], payload.message)
-    return await agent.handle_message(user["id"], payload.message, payload.conversation_id)
+    response = await agent.handle_message(user["id"], payload.message, payload.conversation_id)
+    background_tasks.add_task(run_summary_agent, user["id"], payload.message, agent)
+    return response
 
 
 @router.post("/chat/stream")
@@ -64,10 +76,12 @@ async def chat(
 async def chat_stream(
     request: Request,
     payload: ChatRequest,
+    background_tasks: BackgroundTasks,
     user: Annotated[dict, Depends(require_user)],
     agent: Annotated[BudgetAgent, Depends(get_agent)],
 ) -> StreamingResponse:
     logger.info("Stream chat from user %s: %.60s…", user["id"], payload.message)
+    background_tasks.add_task(run_summary_agent, user["id"], payload.message, agent)
 
     async def event_stream():
         response = await agent.handle_message(user["id"], payload.message, payload.conversation_id)
@@ -104,4 +118,19 @@ async def transactions(
     repository: Annotated[BudgetRepository, Depends(get_repository)],
 ) -> list[TransactionPublic]:
     return [TransactionPublic(**item) for item in await repository.get_transactions(user["id"])]
+
+
+@router.put("/user/profile")
+async def update_profile(
+    payload: UserProfileUpdate,
+    user: Annotated[dict, Depends(require_user)],
+    repository: Annotated[BudgetRepository, Depends(get_repository)],
+) -> dict:
+    await repository.update_user_profile(
+        user["id"],
+        name=payload.name,
+        avatar=payload.avatar,
+        monthly_income=payload.monthly_income,
+    )
+    return {"status": "success", "profile": payload.model_dump(exclude_unset=True)}
 

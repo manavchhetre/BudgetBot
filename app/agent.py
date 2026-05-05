@@ -12,6 +12,7 @@ class BudgetAgentState(TypedDict, total=False):
     conversation_id: str
     message: str
     user_message_id: str
+    user_profile: dict[str, Any]
     history: list[dict[str, Any]]
     transactions: list[dict[str, Any]]
     summary: dict[str, Any]
@@ -87,6 +88,7 @@ class BudgetAgent:
         return graph.compile()
 
     async def _load_history(self, state: BudgetAgentState) -> BudgetAgentState:
+        state["user_profile"] = await self.repository.get_user_by_id(state["user_id"])
         state["history"] = await self.repository.get_messages(state["user_id"], state["conversation_id"], limit=30)
         state["transactions"] = await self.repository.get_transactions(state["user_id"], limit=100)
         state["summary"] = await self.repository.analytics_summary(state["user_id"])
@@ -157,6 +159,7 @@ class BudgetAgent:
             state["history"],
             state["transactions"],
             state["summary"],
+            state["user_profile"],
         )
         return state
 
