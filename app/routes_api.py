@@ -12,7 +12,7 @@ from app.categorization import MerchantCategorizer
 from app.config import Settings, get_settings
 from app.dependencies import get_repository, require_user
 from app.rate_limit import limiter
-from app.models import AnalyticsSummary, ChatRequest, ChatResponse, TransactionPublic, UserIncomeUpdate
+from app.models import AnalyticsSummary, ChatRequest, ChatResponse, TransactionPublic, UserProfileUpdate
 from app.providers import build_provider_chain
 from app.repositories import BudgetRepository
 
