@@ -79,10 +79,11 @@ def create_app() -> FastAPI:
         )
 
     # --- Middleware (order matters – outermost first) ------------------------
-    if settings.allowed_origin_list:
+    if settings.allowed_origin_list or settings.debug:
+        allowed = settings.allowed_origin_list if settings.allowed_origin_list else ["http://localhost:3000"]
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=settings.allowed_origin_list,
+            allow_origins=allowed,
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
@@ -124,30 +125,24 @@ def create_app() -> FastAPI:
                 content={"status": "unhealthy", "db": "disconnected"},
             )
 
-    # --- Page routes --------------------------------------------------------
-    @app.get("/")
-    async def index(request: Request):
-        if request.session.get("user_id"):
-            return RedirectResponse("/app")
-        return RedirectResponse("/login")
+    # --- Next.js Static Serving ---------------------------------------------
+    import os
+    if os.path.exists(STATIC_DIR / "_next"):
+        app.mount("/_next", StaticFiles(directory=STATIC_DIR / "_next"), name="next_static")
+        
+    if os.path.exists(STATIC_DIR / "assets"):
+        app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets_static")
 
-    @app.get("/login")
-    async def login_page():
-        return FileResponse(STATIC_DIR / "login.html")
-
-    @app.get("/favicon.ico")
-    async def favicon():
-        return FileResponse(STATIC_DIR / "favicon.svg", media_type="image/svg+xml")
-
-    @app.get("/register")
-    async def register_page():
-        return FileResponse(STATIC_DIR / "register.html")
-
-    @app.get("/app")
-    async def app_page(request: Request):
-        if not request.session.get("user_id"):
-            return RedirectResponse("/login")
-        return FileResponse(STATIC_DIR / "app.html")
+    # Catch-all route for Next.js App Router (Client-side routing)
+    @app.get("/{full_path:path}")
+    async def catch_all(request: Request, full_path: str):
+        if full_path.startswith("api/") or full_path.startswith("static/"):
+            return JSONResponse(status_code=404, content={"detail": "Not found"})
+        
+        index_path = STATIC_DIR / "index.html"
+        if not index_path.exists():
+            return JSONResponse(status_code=404, content={"detail": "Frontend not built yet. Run npm run build in frontend/."})
+        return FileResponse(index_path)
 
     return app
 
