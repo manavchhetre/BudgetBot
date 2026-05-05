@@ -37,9 +37,11 @@ class BudgetRepository(Protocol):
     async def create_conversation(self, user_id: str, title: str) -> dict[str, Any]: ...
     async def get_conversations(self, user_id: str) -> list[dict[str, Any]]: ...
     async def add_message(self, user_id: str, conversation_id: str, role: str, content: str) -> dict[str, Any]: ...
-    async def get_messages(self, user_id: str, conversation_id: str, limit: int = 30) -> list[dict[str, Any]]: ...
+    async def get_messages(self, user_id: str, conversation_id: str, limit: int = 50) -> list[dict[str, Any]]: ...
     async def create_transaction(self, user_id: str, transaction: TransactionCreate) -> dict[str, Any]: ...
-    async def get_transactions(self, user_id: str, limit: int = 100) -> list[dict[str, Any]]: ...
+    async def get_transactions(self, user_id: str, limit: int = 50) -> list[dict[str, Any]]: ...
+    async def delete_transaction(self, user_id: str, category: str | None = None, merchant: str | None = None) -> bool: ...
+    async def update_transaction(self, user_id: str, amount: float | None = None, category: str | None = None, merchant: str | None = None) -> bool: ...
     async def analytics_summary(self, user_id: str) -> dict[str, Any]: ...
 
 
@@ -148,7 +150,7 @@ class MongoBudgetRepository:
         document["_id"] = result.inserted_id
         return serialize_id(document)
 
-    async def get_messages(self, user_id: str, conversation_id: str, limit: int = 30) -> list[dict[str, Any]]:
+    async def get_messages(self, user_id: str, conversation_id: str, limit: int = 50) -> list[dict[str, Any]]:
         cursor = (
             self.db.messages.find({"user_id": ObjectId(user_id), "conversation_id": ObjectId(conversation_id)})
             .sort("created_at", DESCENDING)
@@ -172,9 +174,41 @@ class MongoBudgetRepository:
         document["_id"] = result.inserted_id
         return serialize_id(document)
 
-    async def get_transactions(self, user_id: str, limit: int = 100) -> list[dict[str, Any]]:
-        cursor = self.db.transactions.find({"user_id": ObjectId(user_id)}).sort("date", DESCENDING).limit(limit)
-        return [serialize_id(document) async for document in cursor]
+    async def get_transactions(self, user_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        cursor = self.db.transactions.find({"user_id": ObjectId(user_id)}).sort("date", -1).limit(limit)
+        return [serialize_id(doc) for doc in await cursor.to_list(length=limit)]
+
+    async def delete_transaction(self, user_id: str, category: str | None = None, merchant: str | None = None) -> bool:
+        query = {"user_id": ObjectId(user_id)}
+        if category:
+            query["category"] = re.compile(f"^{category}$", re.IGNORECASE)
+        if merchant:
+            query["merchant"] = re.compile(f"^{merchant}$", re.IGNORECASE)
+        
+        doc = await self.db.transactions.find_one(query, sort=[("date", -1)])
+        if not doc:
+            return False
+        res = await self.db.transactions.delete_one({"_id": doc["_id"]})
+        return res.deleted_count > 0
+
+    async def update_transaction(self, user_id: str, amount: float | None = None, category: str | None = None, merchant: str | None = None) -> bool:
+        doc = await self.db.transactions.find_one({"user_id": ObjectId(user_id)}, sort=[("date", -1)])
+        if not doc:
+            return False
+        
+        updates = {}
+        if amount is not None:
+            updates["amount"] = amount
+        if category is not None:
+            updates["category"] = category
+        if merchant is not None:
+            updates["merchant"] = merchant
+            
+        if not updates:
+            return False
+            
+        res = await self.db.transactions.update_one({"_id": doc["_id"]}, {"$set": updates})
+        return res.modified_count > 0
 
     async def analytics_summary(self, user_id: str) -> dict[str, Any]:
         object_user_id = ObjectId(user_id)

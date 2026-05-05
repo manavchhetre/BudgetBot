@@ -7,6 +7,8 @@ from pydantic import BaseModel, EmailStr, Field
 
 class Intent(str, Enum):
     add_transaction = "add_transaction"
+    edit_transaction = "edit_transaction"
+    delete_transaction = "delete_transaction"
     analytics_query = "analytics_query"
     general_chat = "general_chat"
 

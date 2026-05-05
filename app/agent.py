@@ -18,6 +18,7 @@ class BudgetAgentState(TypedDict, total=False):
     transactions: list[dict[str, Any]]
     summary: dict[str, Any]
     intent: Intent
+    extracted_data: dict[str, Any]
     draft: TransactionDraft
     response: str
     transaction_saved: bool
@@ -60,6 +61,8 @@ class BudgetAgent:
         graph.add_node("extract_transaction", self._extract_transaction)
         graph.add_node("persist_transaction", self._persist_transaction)
         graph.add_node("clarify_transaction", self._clarify_transaction)
+        graph.add_node("edit_transaction", self._edit_transaction)
+        graph.add_node("delete_transaction", self._delete_transaction)
         graph.add_node("answer_analytics", self._answer_analytics)
         graph.add_node("answer_general", self._answer_general)
 
@@ -70,6 +73,8 @@ class BudgetAgent:
             self._route_by_intent,
             {
                 "extract_transaction": "extract_transaction",
+                "edit_transaction": "edit_transaction",
+                "delete_transaction": "delete_transaction",
                 "answer_analytics": "answer_analytics",
                 "answer_general": "answer_general",
             },
@@ -84,6 +89,8 @@ class BudgetAgent:
         )
         graph.add_edge("persist_transaction", END)
         graph.add_edge("clarify_transaction", END)
+        graph.add_edge("edit_transaction", END)
+        graph.add_edge("delete_transaction", END)
         graph.add_edge("answer_analytics", END)
         graph.add_edge("answer_general", END)
         return graph.compile()
@@ -97,7 +104,9 @@ class BudgetAgent:
         return state
 
     async def _classify_intent(self, state: BudgetAgentState) -> BudgetAgentState:
-        state["intent"] = await self.interpreter.classify_intent(state["message"])
+        classification = await self.interpreter.classify_intent(state["message"])
+        state["intent"] = classification["intent"]
+        state["extracted_data"] = classification
         return state
 
     async def _extract_transaction(self, state: BudgetAgentState) -> BudgetAgentState:
@@ -130,6 +139,33 @@ class BudgetAgent:
         state["transaction_saved"] = False
         state["needs_clarification"] = True
         state["response"] = f"I can record that expense, but I need the {readable}. Could you send it?"
+        return state
+
+    async def _edit_transaction(self, state: BudgetAgentState) -> BudgetAgentState:
+        data = state.get("extracted_data", {})
+        success = await self.repository.update_transaction(
+            state["user_id"],
+            amount=data.get("amount"),
+            category=data.get("category"),
+            merchant=data.get("merchant")
+        )
+        if success:
+            state["response"] = "I've successfully updated that recent transaction for you."
+        else:
+            state["response"] = "I couldn't find a recent transaction matching that description to update."
+        return state
+
+    async def _delete_transaction(self, state: BudgetAgentState) -> BudgetAgentState:
+        data = state.get("extracted_data", {})
+        success = await self.repository.delete_transaction(
+            state["user_id"],
+            category=data.get("category"),
+            merchant=data.get("merchant")
+        )
+        if success:
+            state["response"] = "I've successfully deleted that recent transaction."
+        else:
+            state["response"] = "I couldn't find a recent transaction matching that description to delete."
         return state
 
     async def _answer_analytics(self, state: BudgetAgentState) -> BudgetAgentState:
@@ -169,6 +205,10 @@ class BudgetAgent:
     def _route_by_intent(self, state: BudgetAgentState) -> str:
         if state["intent"] == Intent.add_transaction:
             return "extract_transaction"
+        if state["intent"] == Intent.edit_transaction:
+            return "edit_transaction"
+        if state["intent"] == Intent.delete_transaction:
+            return "delete_transaction"
         if state["intent"] == Intent.analytics_query:
             return "answer_analytics"
         return "answer_general"

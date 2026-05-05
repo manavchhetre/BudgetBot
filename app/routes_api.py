@@ -1,6 +1,8 @@
 import asyncio
 import json
 import logging
+import io
+import csv
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, BackgroundTasks
@@ -161,4 +163,31 @@ async def delete_budget(
 ) -> dict:
     deleted = await repository.delete_category_budget(user["id"], category)
     return {"status": "success", "deleted": deleted}
+
+from fastapi.responses import StreamingResponse
+
+@router.get("/export")
+async def export_data(
+    user: Annotated[dict, Depends(require_user)],
+    repository: Annotated[BudgetRepository, Depends(get_repository)],
+):
+    transactions = await repository.get_transactions(user["id"], limit=10000)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Date", "Amount", "Currency", "Merchant", "Category", "Notes"])
+    for t in transactions:
+        writer.writerow([
+            t["date"],
+            t["amount"],
+            t["currency"],
+            t["merchant"],
+            t["category"],
+            t.get("notes", "")
+        ])
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=budgetbot_export.csv"}
+    )
 

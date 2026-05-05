@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 from openai import AsyncOpenAI
+from groq import AsyncGroq
 
 from app.config import Settings
 
@@ -43,6 +44,35 @@ def clean_model_text(raw_text: str) -> str:
         if marker in text.lower():
             text = text[text.lower().find(marker) + len(marker) :].strip()
     return text
+
+
+class GroqProvider(LLMProvider):
+    def __init__(self, api_key: str, model: str):
+        if not api_key:
+            raise ProviderUnavailableError("GROQ_API_KEY is not configured")
+        self.client = AsyncGroq(api_key=api_key)
+        self.model = model
+
+    async def complete_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+        response = await self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            response_format={"type": "json_object"},
+        )
+        return parse_json_response(response.choices[0].message.content)
+
+    async def complete_text(self, system_prompt: str, user_prompt: str) -> str:
+        response = await self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        return clean_model_text(response.choices[0].message.content)
 
 
 class OpenAIProvider(LLMProvider):
@@ -153,7 +183,9 @@ def build_provider_chain(settings: Settings) -> ProviderChain:
     providers: list[LLMProvider] = []
     for name in dict.fromkeys(ordered_names):
         try:
-            if name == "openai":
+            if name == "groq":
+                providers.append(GroqProvider(settings.groq_api_key, settings.groq_model))
+            elif name == "openai":
                 providers.append(OpenAIProvider(settings.openai_api_key, settings.openai_model))
             elif name in {"google", "gemini"}:
                 providers.append(GeminiProvider(settings.google_api_key, settings.gemini_model))

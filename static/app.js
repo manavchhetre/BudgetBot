@@ -385,6 +385,13 @@ async function loadBudgets() {
   if (!summary) return;
   if (!budgetsListEl) return;
   
+  const datalist = document.querySelector("#categorySuggestions");
+  if (datalist && summary.category_breakdown) {
+    datalist.innerHTML = summary.category_breakdown
+      .map(c => `<option value="${escapeHtml(c.category)}"></option>`)
+      .join("");
+  }
+
   budgetsListEl.innerHTML = "";
   if (!summary.budget_tracking || !summary.budget_tracking.length) {
     budgetsListEl.innerHTML = `<p class="muted">You don't have any active budgets. Add one above!</p>`;
@@ -534,6 +541,13 @@ if (settingsForm) {
       btn.textContent = "Save Settings";
       setTimeout(() => msg.textContent = "", 3000);
     }
+  });
+}
+
+const exportDataBtn = document.querySelector("#exportDataBtn");
+if (exportDataBtn) {
+  exportDataBtn.addEventListener("click", () => {
+    window.location.href = "/api/export";
   });
 }
 

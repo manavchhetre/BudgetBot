@@ -22,7 +22,10 @@ class Settings(BaseSettings):
     llm_fallback_providers: str = ""
 
     openai_api_key: str = ""
-    openai_model: str = "gpt-4.1-mini"
+    openai_model: str = "gpt-4o-mini"
+
+    groq_api_key: str = ""
+    groq_model: str = "llama3-8b-8192"
 
     google_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash"

@@ -136,17 +136,8 @@
             <form id="budgetForm" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
               <div class="field-group" style="flex:1; min-width:200px">
                 <label for="budgetCategory" class="field-label">Category</label>
-                <select id="budgetCategory" required style="padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--surface); color: var(--ink);">
-                  <option value="">Select Category...</option>
-                  <option value="Food & Dining">Food & Dining</option>
-                  <option value="Groceries">Groceries</option>
-                  <option value="Transportation">Transportation</option>
-                  <option value="Entertainment">Entertainment</option>
-                  <option value="Shopping">Shopping</option>
-                  <option value="Bills & Utilities">Bills & Utilities</option>
-                  <option value="Health & Fitness">Health & Fitness</option>
-                  <option value="Other">Other</option>
-                </select>
+                <input type="text" id="budgetCategory" list="categorySuggestions" placeholder="e.g. Groceries" required style="padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--surface); color: var(--ink);">
+                <datalist id="categorySuggestions"></datalist>
               </div>
               <div class="field-group" style="flex:1; min-width:150px">
                 <label for="budgetLimit" class="field-label">Limit Amount (INR)</label>
@@ -178,15 +169,28 @@
               <label for="monthlyIncomeInput" class="field-label" style="margin-bottom: -6px;">Monthly Income (INR)</label>
               <input type="number" id="monthlyIncomeInput" style="padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--surface); color: var(--ink);" placeholder="e.g. 50000" required>
               
-              <label for="themeSelect" class="field-label" style="margin-bottom: -6px;">Theme</label>
-              <select id="themeSelect" style="padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--surface); color: var(--ink);">
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-              </select>
-
               <button type="submit" class="primary-btn" id="saveSettingsBtn" style="margin-top: 8px;">Save Settings</button>
               <p id="settingsMsg" style="font-size: 13px; color: var(--green); margin: 0;"></p>
             </form>
+          </section>
+          
+          <section class="card" style="grid-column:1/-1">
+            <div class="card-head"><h2>Appearance</h2></div>
+            <div class="settings-group">
+              <label class="toggle-switch">
+                <input type="checkbox" id="themeToggle" />
+                <span class="slider"></span>
+                <span class="toggle-label" style="margin-left: 12px; color: var(--ink);">Dark Mode</span>
+              </label>
+            </div>
+          </section>
+
+          <section class="card" style="grid-column:1/-1">
+            <div class="card-head"><h2>Data Management</h2></div>
+            <div class="settings-group" style="padding-top: 10px;">
+              <button type="button" id="exportDataBtn" class="primary-btn" style="background: var(--green);">Export Transactions (CSV)</button>
+              <p class="muted" style="margin-top: 8px; font-size: 12px;">Download all your expense data as a CSV file.</p>
+            </div>
           </section>
         </div>
       </main>

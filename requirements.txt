@@ -15,4 +15,4 @@ openai==1.59.6
 pytest==8.3.4
 pytest-asyncio==0.25.0
 asgi-lifespan==2.1.0
-
+groq==1.2.0

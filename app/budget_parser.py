@@ -13,21 +13,23 @@ class BudgetTextInterpreter:
         self.provider_chain = provider_chain
         self.categorizer = categorizer or MerchantCategorizer()
 
-    async def classify_intent(self, message: str) -> Intent:
+    async def classify_intent(self, message: str) -> dict[str, Any]:
         lowered = message.strip().lower()
         if lowered in ["hi", "hello", "hey", "yo", "greetings", "hi there", "hello there", "hey jerry", "hi jerry"]:
-            return Intent.general_chat
+            return {"intent": Intent.general_chat}
 
         system_prompt = (
             f"{current_date_context()}\n"
             "Classify a personal budgeting chatbot message. Return JSON only with key intent. "
-            "Allowed intents: add_transaction, analytics_query, general_chat."
+            "Allowed intents: add_transaction, edit_transaction, delete_transaction, analytics_query, general_chat.\n"
+            "If edit_transaction or delete_transaction, also extract 'merchant' and 'category' if mentioned, and 'amount' if edit_transaction."
         )
         try:
             data = await self.provider_chain.complete_json(system_prompt, message)
-            return Intent(data.get("intent", Intent.general_chat))
+            intent = Intent(data.get("intent", Intent.general_chat))
+            return {"intent": intent, "merchant": data.get("merchant"), "category": data.get("category"), "amount": data.get("amount")}
         except (ProviderUnavailableError, ValueError, KeyError):
-            return self._classify_with_rules(message)
+            return {"intent": self._classify_with_rules(message)}
 
     async def extract_transaction(self, message: str) -> TransactionDraft:
         system_prompt = (
