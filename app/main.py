@@ -139,10 +139,19 @@ def create_app() -> FastAPI:
         if full_path.startswith("api/") or full_path.startswith("static/"):
             return JSONResponse(status_code=404, content={"detail": "Not found"})
         
-        index_path = STATIC_DIR / "index.html"
-        if not index_path.exists():
+        if not full_path or full_path == "/":
+            file_path = STATIC_DIR / "index.html"
+        else:
+            clean_path = full_path.rstrip("/")
+            file_path = STATIC_DIR / f"{clean_path}.html"
+            if not file_path.exists():
+                file_path = STATIC_DIR / clean_path / "index.html"
+            if not file_path.exists():
+                file_path = STATIC_DIR / "index.html"
+
+        if not file_path.exists():
             return JSONResponse(status_code=404, content={"detail": "Frontend not built yet. Run npm run build in frontend/."})
-        return FileResponse(index_path)
+        return FileResponse(file_path)
 
     return app
 

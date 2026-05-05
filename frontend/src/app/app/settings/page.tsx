@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { Settings as SettingsIcon, Download, Check } from "lucide-react";
 
 export default function SettingsPage() {
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState("");
   const [income, setIncome] = useState("");
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [theme, setTheme] = useState("light");
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -23,8 +23,6 @@ export default function SettingsPage() {
       }
     }
     load();
-    const t = localStorage.getItem("theme") || "light";
-    setTheme(t);
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {
@@ -39,20 +37,13 @@ export default function SettingsPage() {
           monthly_income: income ? parseFloat(income) : null,
         }),
       });
-      setMsg("Settings saved successfully!");
-      setTimeout(() => setMsg(""), 3000);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       console.error(err);
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleThemeToggle = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-    document.documentElement.setAttribute("data-theme", newTheme);
   };
 
   const handleExport = () => {
@@ -61,69 +52,77 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="p-6 md:p-8 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Settings</h1>
+    <div className="p-6 md:p-8 max-w-3xl mx-auto fade-in">
+      <div className="flex items-center gap-2 mb-6">
+        <SettingsIcon size={20} className="text-accent" />
+        <h1 className="text-2xl font-bold text-ink">Settings</h1>
+      </div>
 
       <div className="flex flex-col gap-6">
-        <section className="bg-surface border border-line rounded-xl p-6">
-          <h2 className="font-bold text-lg mb-4">Profile Settings</h2>
-          <form onSubmit={handleSave} className="flex flex-col gap-4">
+        {/* Profile */}
+        <section className="glass p-6 slide-up">
+          <h2 className="font-semibold text-base mb-5 text-ink">Profile</h2>
+          <form onSubmit={handleSave} className="flex flex-col gap-5">
             <div>
-              <label className="block text-sm font-semibold mb-1 text-ink">Name</label>
+              <label className="block text-xs font-medium text-muted mb-2 uppercase tracking-wider">Name</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="w-full p-3 border border-line rounded-lg bg-bg text-ink"
+                className="input-glass"
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold mb-1 text-ink">Avatar (Emoji)</label>
+              <label className="block text-xs font-medium text-muted mb-2 uppercase tracking-wider">Avatar (Emoji)</label>
               <input
                 type="text"
                 value={avatar}
                 onChange={(e) => setAvatar(e.target.value)}
                 maxLength={2}
-                className="w-full p-3 border border-line rounded-lg bg-bg text-ink"
+                placeholder="🐾"
+                className="input-glass"
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold mb-1 text-ink">Monthly Income (₹)</label>
+              <label className="block text-xs font-medium text-muted mb-2 uppercase tracking-wider">Monthly Income (₹)</label>
               <input
                 type="number"
                 value={income}
                 onChange={(e) => setIncome(e.target.value)}
                 required
-                className="w-full p-3 border border-line rounded-lg bg-bg text-ink"
+                placeholder="50000"
+                className="input-glass"
               />
             </div>
-            <div className="flex items-center gap-4 mt-2">
-              <button type="submit" disabled={saving} className="px-6 py-3 font-bold text-white bg-primary hover:bg-primary-hover rounded-lg transition-colors">
-                {saving ? "Saving..." : "Save Profile"}
+            <div className="flex items-center gap-3 mt-1">
+              <button type="submit" disabled={saving} className="btn-primary">
+                {saving ? "Saving…" : saved ? (
+                  <span className="flex items-center gap-2">
+                    <Check size={16} /> Saved
+                  </span>
+                ) : "Save Changes"}
               </button>
-              {msg && <span className="text-green text-sm font-medium">{msg}</span>}
             </div>
           </form>
         </section>
 
-        <section className="bg-surface border border-line rounded-xl p-6">
-          <h2 className="font-bold text-lg mb-4">Appearance</h2>
-          <div className="flex items-center gap-3">
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" className="sr-only peer" checked={theme === "dark"} onChange={handleThemeToggle} />
-              <div className="w-11 h-6 bg-line peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-              <span className="ml-3 text-sm font-medium text-ink">Dark Mode</span>
-            </label>
-          </div>
-        </section>
-
-        <section className="bg-surface border border-line rounded-xl p-6">
-          <h2 className="font-bold text-lg mb-4">Data Management</h2>
-          <button onClick={handleExport} className="px-6 py-3 font-bold text-white bg-green hover:bg-opacity-90 rounded-lg transition-colors">
+        {/* Data Management */}
+        <section className="glass p-6 slide-up-delay">
+          <h2 className="font-semibold text-base mb-4 text-ink">Data Management</h2>
+          <p className="text-sm text-muted mb-4">Download all your expense data as a CSV file for use in Excel or Google Sheets.</p>
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm transition-all duration-200 hover:-translate-y-0.5"
+            style={{
+              background: 'linear-gradient(135deg, rgba(52, 211, 153, 0.15), rgba(16, 185, 129, 0.08))',
+              border: '1px solid rgba(52, 211, 153, 0.15)',
+              color: '#34d399',
+            }}
+          >
+            <Download size={16} />
             Export Transactions (CSV)
           </button>
-          <p className="text-muted text-xs mt-2">Download all your expense data as a CSV file.</p>
         </section>
       </div>
     </div>

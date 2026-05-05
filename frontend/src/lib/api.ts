@@ -23,7 +23,15 @@ export async function api(endpoint: string, options: RequestInit = {}) {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || `API Error: ${response.status}`);
+    let message = `API Error: ${response.status}`;
+    if (errorData.detail) {
+      if (typeof errorData.detail === "string") {
+        message = errorData.detail;
+      } else if (Array.isArray(errorData.detail)) {
+        message = errorData.detail.map((e: any) => e.msg || JSON.stringify(e)).join(", ");
+      }
+    }
+    throw new Error(message);
   }
 
   return response.json();
