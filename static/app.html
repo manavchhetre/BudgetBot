@@ -7,6 +7,7 @@
     <meta name="description" content="Jerry dashboard – track expenses, view analytics, and manage your finances with AI." />
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/static/styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body>
     <div class="app-shell">
@@ -98,7 +99,9 @@
           </section>
           <section class="card">
             <div class="card-head"><h2>Top Categories</h2></div>
-            <div id="categoryChart"></div>
+            <div id="categoryChartContainer" style="position: relative; height: 250px; width: 100%;">
+              <canvas id="spendChart"></canvas>
+            </div>
           </section>
           <section class="card insight-card">
             <div class="card-head"><h2>💡 Insights</h2></div>
@@ -129,8 +132,33 @@
       <main class="page-content hidden" id="page-budgets">
         <div class="page-grid">
           <section class="card" style="grid-column:1/-1">
-            <div class="card-head"><h2>My Budgets</h2></div>
-            <p class="muted" style="padding:20px">Budget management coming soon. Ask Jerry to set budgets via chat!</p>
+            <div class="card-head"><h2>Set a Budget</h2></div>
+            <form id="budgetForm" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
+              <div class="field-group" style="flex:1; min-width:200px">
+                <label for="budgetCategory" class="field-label">Category</label>
+                <select id="budgetCategory" required style="padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--surface); color: var(--ink);">
+                  <option value="">Select Category...</option>
+                  <option value="Food & Dining">Food & Dining</option>
+                  <option value="Groceries">Groceries</option>
+                  <option value="Transportation">Transportation</option>
+                  <option value="Entertainment">Entertainment</option>
+                  <option value="Shopping">Shopping</option>
+                  <option value="Bills & Utilities">Bills & Utilities</option>
+                  <option value="Health & Fitness">Health & Fitness</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div class="field-group" style="flex:1; min-width:150px">
+                <label for="budgetLimit" class="field-label">Limit Amount (INR)</label>
+                <input type="number" id="budgetLimit" placeholder="e.g. 5000" required style="padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--surface); color: var(--ink);">
+              </div>
+              <button type="submit" class="primary-btn" style="height:42px; padding:0 20px;">Save Budget</button>
+            </form>
+          </section>
+          
+          <section class="card" style="grid-column:1/-1">
+            <div class="card-head"><h2>Active Budgets</h2></div>
+            <div id="budgetsList"></div>
           </section>
         </div>
       </main>

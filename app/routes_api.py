@@ -12,7 +12,7 @@ from app.categorization import MerchantCategorizer
 from app.config import Settings, get_settings
 from app.dependencies import get_repository, require_user
 from app.rate_limit import limiter
-from app.models import AnalyticsSummary, ChatRequest, ChatResponse, TransactionPublic, UserProfileUpdate
+from app.models import AnalyticsSummary, ChatRequest, ChatResponse, TransactionPublic, UserProfileUpdate, CategoryBudgetCreate, CategoryBudget
 from app.providers import build_provider_chain
 from app.repositories import BudgetRepository
 
@@ -133,4 +133,32 @@ async def update_profile(
         monthly_income=payload.monthly_income,
     )
     return {"status": "success", "profile": payload.model_dump(exclude_unset=True)}
+
+
+@router.get("/budgets", response_model=list[CategoryBudget])
+async def get_budgets(
+    user: Annotated[dict, Depends(require_user)],
+    repository: Annotated[BudgetRepository, Depends(get_repository)],
+) -> list[CategoryBudget]:
+    return await repository.get_category_budgets(user["id"])
+
+
+@router.post("/budgets")
+async def create_budget(
+    payload: CategoryBudgetCreate,
+    user: Annotated[dict, Depends(require_user)],
+    repository: Annotated[BudgetRepository, Depends(get_repository)],
+) -> dict:
+    budget = await repository.set_category_budget(user["id"], payload.category, payload.limit_amount)
+    return {"status": "success", "budget": budget}
+
+
+@router.delete("/budgets/{category}")
+async def delete_budget(
+    category: str,
+    user: Annotated[dict, Depends(require_user)],
+    repository: Annotated[BudgetRepository, Depends(get_repository)],
+) -> dict:
+    deleted = await repository.delete_category_budget(user["id"], category)
+    return {"status": "success", "deleted": deleted}
 

@@ -28,6 +28,9 @@ const userNameEl = document.querySelector("#userName");
 const sendBtn = document.querySelector("#sendBtn");
 const pageTitleEl = document.querySelector("#pageTitle");
 const pageSubtitleEl = document.querySelector("#pageSubtitle");
+const budgetsListEl = document.querySelector("#budgetsList");
+
+let spendChartInstance = null;
 
 /* ── Page routing ── */
 const pageMeta = {
@@ -70,6 +73,8 @@ function switchPage(page) {
   } else if (page === "history") {
     loadConversations();
     loadTransactions();
+  } else if (page === "budgets") {
+    loadBudgets();
   }
 }
 
@@ -327,23 +332,99 @@ async function loadAnalytics() {
       <div class="metric"><strong>${summary.transaction_count}</strong><span>Transactions</span></div>
       <div class="metric"><strong>${summary.top_category || "-"}</strong><span>Top category</span></div>
     </div>
-    <div style="margin-top:16px">
-      <p class="section-label">CATEGORY BREAKDOWN</p>
-      <div class="breakdown-list">
-        ${summary.category_breakdown.length
-          ? summary.category_breakdown.map((i) =>
-              `<div class="breakdown-item"><span>${escapeHtml(i.category)}</span><strong>${formatMoney(i.amount)}</strong></div>`
-            ).join("")
-          : `<p class="muted">No spend recorded yet.</p>`
-        }
-      </div>
-    </div>
   `;
   dailyBreakdownEl.innerHTML = summary.daily_breakdown.length
     ? summary.daily_breakdown.map((i) =>
         `<div class="breakdown-item date-row"><span>${formatDate(i.date)}</span><strong>${formatMoney(i.amount)}</strong></div>`
       ).join("")
     : `<p class="muted">No date-wise spend yet.</p>`;
+
+  // Render Chart.js
+  const ctx = document.getElementById("spendChart");
+  if (!ctx || !summary.category_breakdown.length) return;
+
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  const textColor = isDark ? "#cbd5e1" : "#475569";
+  const gridColor = isDark ? "#334155" : "#e2e8f0";
+
+  if (spendChartInstance) {
+    spendChartInstance.destroy();
+  }
+
+  spendChartInstance = new Chart(ctx, {
+    type: "doughnut",
+    data: {
+      labels: summary.category_breakdown.map((c) => c.category),
+      datasets: [{
+        data: summary.category_breakdown.map((c) => c.amount),
+        backgroundColor: [
+          "#6366f1", "#8b5cf6", "#ec4899", "#14b8a6", "#f59e0b", "#3b82f6", "#10b981", "#64748b"
+        ],
+        borderWidth: 0,
+        hoverOffset: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: "right", labels: { color: textColor, font: { family: "Inter" } } },
+        tooltip: {
+          callbacks: {
+            label: function(context) { return " " + formatMoney(context.raw); }
+          }
+        }
+      },
+      cutout: "65%"
+    }
+  });
+}
+
+async function loadBudgets() {
+  const summary = await api("/api/analytics/summary");
+  if (!summary) return;
+  if (!budgetsListEl) return;
+  
+  budgetsListEl.innerHTML = "";
+  if (!summary.budget_tracking || !summary.budget_tracking.length) {
+    budgetsListEl.innerHTML = `<p class="muted">You don't have any active budgets. Add one above!</p>`;
+    return;
+  }
+
+  summary.budget_tracking.forEach((b) => {
+    const pct = Math.min(100, (b.spent_amount / b.limit_amount) * 100);
+    let colorClass = "";
+    if (pct >= 90) colorClass = "danger";
+    else if (pct >= 75) colorClass = "warning";
+
+    const item = document.createElement("div");
+    item.className = "budget-item";
+    item.innerHTML = `
+      <div class="budget-header">
+        <span>${escapeHtml(b.category)}</span>
+        <button class="budget-del-btn" data-category="${escapeHtml(b.category)}" title="Delete Budget">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </button>
+      </div>
+      <div class="budget-bar-wrap">
+        <div class="budget-bar ${colorClass}" style="width: ${pct}%"></div>
+      </div>
+      <div class="budget-meta">
+        <span>${formatMoney(b.spent_amount)} spent</span>
+        <span>${formatMoney(b.remaining_amount)} left of ${formatMoney(b.limit_amount)}</span>
+      </div>
+    `;
+    
+    item.querySelector(".budget-del-btn").addEventListener("click", async (e) => {
+      const cat = e.currentTarget.dataset.category;
+      if (confirm(`Delete budget for ${cat}?`)) {
+        await api(`/api/budgets/${encodeURIComponent(cat)}`, { method: "DELETE" });
+        loadBudgets();
+      }
+    });
+
+    budgetsListEl.appendChild(item);
+  });
 }
 
 async function loadTransactions() {
@@ -400,6 +481,28 @@ if (railToggle) {
   });
 }
 
+const budgetForm = document.querySelector("#budgetForm");
+if (budgetForm) {
+  budgetForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const cat = document.querySelector("#budgetCategory").value;
+    const limit = parseFloat(document.querySelector("#budgetLimit").value);
+    if (!cat || !limit) return;
+    
+    try {
+      await api("/api/budgets", {
+        method: "POST",
+        body: JSON.stringify({ category: cat, limit_amount: limit })
+      });
+      document.querySelector("#budgetLimit").value = "";
+      document.querySelector("#budgetCategory").value = "";
+      loadBudgets();
+    } catch (err) {
+      alert("Failed to save budget");
+    }
+  });
+}
+
 const settingsForm = document.querySelector("#settingsForm");
 if (settingsForm) {
   settingsForm.addEventListener("submit", async (e) => {
@@ -436,5 +539,5 @@ if (settingsForm) {
 
 /* ── Init ── */
 loadMe()
-  .then(() => Promise.all([loadAnalytics(), loadTransactions(), loadConversations()]))
+  .then(() => Promise.all([loadAnalytics(), loadTransactions(), loadConversations(), loadBudgets()]))
   .catch(() => { window.location.href = "/login"; });

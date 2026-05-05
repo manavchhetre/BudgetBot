@@ -55,6 +55,7 @@ class BudgetTextInterpreter:
         transactions: list[dict[str, Any]],
         summary: dict[str, Any],
         user_profile: dict[str, Any],
+        budgets: list[dict[str, Any]],
     ) -> str:
         system_prompt = (
             f"{current_date_context()}\n"
@@ -74,6 +75,10 @@ class BudgetTextInterpreter:
         financial_context = f"Monthly Income: {income if income else 'Not set'}"
         if remaining is not None:
             financial_context += f"\nRemaining Budget this month: {remaining}"
+            
+        if budgets:
+            budget_str = "\n".join(f"- {b['category']}: Limit {b['limit_amount']}" for b in budgets)
+            financial_context += f"\n\nCategory Budgets:\n{budget_str}"
             
         prompt = (
             f"User Profile Summary:\n{user_summary or 'No additional context.'}\n\n"

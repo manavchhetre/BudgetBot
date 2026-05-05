@@ -13,6 +13,7 @@ class BudgetAgentState(TypedDict, total=False):
     message: str
     user_message_id: str
     user_profile: dict[str, Any]
+    budgets: list[dict[str, Any]]
     history: list[dict[str, Any]]
     transactions: list[dict[str, Any]]
     summary: dict[str, Any]
@@ -89,6 +90,7 @@ class BudgetAgent:
 
     async def _load_history(self, state: BudgetAgentState) -> BudgetAgentState:
         state["user_profile"] = await self.repository.get_user_by_id(state["user_id"])
+        state["budgets"] = await self.repository.get_category_budgets(state["user_id"])
         state["history"] = await self.repository.get_messages(state["user_id"], state["conversation_id"], limit=30)
         state["transactions"] = await self.repository.get_transactions(state["user_id"], limit=100)
         state["summary"] = await self.repository.analytics_summary(state["user_id"])
@@ -160,6 +162,7 @@ class BudgetAgent:
             state["transactions"],
             state["summary"],
             state["user_profile"],
+            state["budgets"],
         )
         return state
 

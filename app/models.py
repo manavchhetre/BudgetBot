@@ -84,6 +84,16 @@ class TransactionPublic(BaseModel):
     created_at: datetime
 
 
+class CategoryBudgetCreate(BaseModel):
+    category: str
+    limit_amount: float
+
+class CategoryBudget(BaseModel):
+    category: str
+    limit_amount: float
+    spent_amount: float = 0.0
+    remaining_amount: float = 0.0
+
 class AnalyticsSummary(BaseModel):
     total_spend: float
     monthly_income: float | None = None
@@ -93,5 +103,6 @@ class AnalyticsSummary(BaseModel):
     top_merchant: str | None
     category_breakdown: list[dict[str, Any]]
     daily_breakdown: list[dict[str, Any]]
+    budget_tracking: list[CategoryBudget] = []
     monthly_trend: list[dict[str, Any]]
     recent_transactions: list[TransactionPublic]

@@ -31,6 +31,9 @@ class BudgetRepository(Protocol):
     async def get_user_by_email(self, email: str) -> dict[str, Any] | None: ...
     async def get_user_by_id(self, user_id: str) -> dict[str, Any] | None: ...
     async def update_user_profile(self, user_id: str, name: str | None = None, avatar: str | None = None, monthly_income: float | None = None, user_summary: str | None = None) -> None: ...
+    async def set_category_budget(self, user_id: str, category: str, limit_amount: float) -> dict[str, Any]: ...
+    async def get_category_budgets(self, user_id: str) -> list[dict[str, Any]]: ...
+    async def delete_category_budget(self, user_id: str, category: str) -> bool: ...
     async def create_conversation(self, user_id: str, title: str) -> dict[str, Any]: ...
     async def get_conversations(self, user_id: str) -> list[dict[str, Any]]: ...
     async def add_message(self, user_id: str, conversation_id: str, role: str, content: str) -> dict[str, Any]: ...
@@ -89,6 +92,28 @@ class MongoBudgetRepository:
             update_fields["user_summary"] = user_summary
         if update_fields:
             await self.db.users.update_one({"_id": ObjectId(user_id)}, {"$set": update_fields})
+
+    async def set_category_budget(self, user_id: str, category: str, limit_amount: float) -> dict[str, Any]:
+        document = {
+            "user_id": ObjectId(user_id),
+            "category": category.strip(),
+            "limit_amount": limit_amount,
+            "updated_at": datetime.now(UTC),
+        }
+        await self.db.budgets.update_one(
+            {"user_id": ObjectId(user_id), "category": category.strip()},
+            {"$set": document},
+            upsert=True
+        )
+        return serialize_id(await self.db.budgets.find_one({"user_id": ObjectId(user_id), "category": category.strip()}))
+
+    async def get_category_budgets(self, user_id: str) -> list[dict[str, Any]]:
+        cursor = self.db.budgets.find({"user_id": ObjectId(user_id)}).sort("category", 1)
+        return [serialize_id(doc) for doc in await cursor.to_list(length=100)]
+
+    async def delete_category_budget(self, user_id: str, category: str) -> bool:
+        result = await self.db.budgets.delete_one({"user_id": ObjectId(user_id), "category": category.strip()})
+        return result.deleted_count > 0
 
     async def create_conversation(self, user_id: str, title: str) -> dict[str, Any]:
         now = datetime.now(UTC)
@@ -181,6 +206,20 @@ class MongoBudgetRepository:
         spend_this_month = monthly_totals.get(current_month, 0.0)
         remaining_budget = (monthly_income - spend_this_month) if monthly_income else None
 
+        # Calculate budget tracking
+        budgets = await self.get_category_budgets(user_id)
+        budget_tracking = []
+        for b in budgets:
+            cat = b["category"]
+            limit = b["limit_amount"]
+            spent = category_totals.get(cat, 0.0)
+            budget_tracking.append({
+                "category": cat,
+                "limit_amount": limit,
+                "spent_amount": spent,
+                "remaining_amount": max(0.0, limit - spent)
+            })
+
         return {
             "total_spend": total_spend,
             "monthly_income": monthly_income,
@@ -188,17 +227,9 @@ class MongoBudgetRepository:
             "transaction_count": await self.db.transactions.count_documents({"user_id": object_user_id}),
             "top_category": top_category,
             "top_merchant": top_merchant,
-            "category_breakdown": [
-                {"category": key, "amount": value}
-                for key, value in sorted(category_totals.items(), key=lambda pair: pair[1], reverse=True)
-            ],
-            "daily_breakdown": [
-                {"date": key, "amount": daily_totals[key]}
-                for key in sorted(daily_totals, reverse=True)
-            ],
-            "monthly_trend": [
-                {"month": key, "amount": monthly_totals[key]}
-                for key in sorted(monthly_totals)
-            ],
-            "recent_transactions": transactions[:8],
+            "category_breakdown": [{"category": k, "amount": v} for k, v in sorted(category_totals.items(), key=lambda x: x[1], reverse=True)],
+            "daily_breakdown": [{"date": k, "amount": v} for k, v in sorted(daily_totals.items())],
+            "budget_tracking": budget_tracking,
+            "monthly_trend": [{"month": k, "amount": v} for k, v in sorted(monthly_totals.items())],
+            "recent_transactions": transactions[:5],
         }
