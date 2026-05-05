@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import Image from "next/image";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -29,61 +30,37 @@ export default function Login() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen px-4">
-      <div className="glass w-full max-w-md p-8 slide-up" style={{ animationDuration: '0.6s' }}>
-        {/* Logo / Brand */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-accent mb-4 shadow-lg" style={{ boxShadow: '0 8px 32px rgba(99, 102, 241, 0.3)' }}>
-            <span className="text-3xl">🐾</span>
-          </div>
-          <h1 className="text-2xl font-bold text-ink">Welcome back</h1>
-          <p className="text-muted text-sm mt-1">Sign in to continue with Jerry</p>
+    <div className="flex items-center justify-center min-h-screen px-4 bg-bg">
+      <div className="card w-full max-w-sm p-6 sm:p-8 fade-in">
+        <div className="text-center mb-6">
+          <Image src="/jerry-icon.png" alt="Jerry" width={56} height={56} className="mx-auto mb-3 rounded-xl" />
+          <h1 className="text-xl font-bold text-ink">Welcome back</h1>
+          <p className="text-muted text-sm mt-1">Sign in to Jerry</p>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm text-center fade-in">
+          <div className="mb-4 p-3 rounded-lg bg-danger/10 text-danger text-sm text-center">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="flex flex-col gap-5">
+        <form onSubmit={handleLogin} className="flex flex-col gap-4">
           <div>
-            <label className="block text-xs font-medium text-muted mb-2 uppercase tracking-wider">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="you@example.com"
-              className="input-glass"
-            />
+            <label className="block text-sm font-medium text-ink-secondary mb-1.5">Email</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="you@example.com" className="input-field" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted mb-2 uppercase tracking-wider">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              placeholder="••••••••"
-              className="input-glass"
-            />
+            <label className="block text-sm font-medium text-ink-secondary mb-1.5">Password</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" className="input-field" />
           </div>
-          <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
-            {loading ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                Signing in…
-              </span>
-            ) : "Sign In"}
+          <button type="submit" disabled={loading} className="btn-primary w-full mt-1">
+            {loading ? "Signing in…" : "Sign In"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-muted">
-          Don&apos;t have an account?{" "}
-          <a href="/register" className="text-primary font-semibold hover:text-primary-hover transition-colors">
-            Create one
-          </a>
+        <p className="mt-5 text-center text-sm text-muted">
+          No account?{" "}
+          <a href="/register" className="text-primary font-medium hover:underline">Sign up</a>
         </p>
       </div>
     </div>

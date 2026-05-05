@@ -139,6 +139,12 @@ def create_app() -> FastAPI:
         if full_path.startswith("api/") or full_path.startswith("static/"):
             return JSONResponse(status_code=404, content={"detail": "Not found"})
         
+        # First check if the path maps to an actual file (images, icons, etc.)
+        if full_path:
+            direct_file = STATIC_DIR / full_path
+            if direct_file.exists() and direct_file.is_file():
+                return FileResponse(direct_file)
+
         if not full_path or full_path == "/":
             file_path = STATIC_DIR / "index.html"
         else:

@@ -3,18 +3,33 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { MessageSquare, PieChart, Clock, Wallet, Settings, PanelLeftClose, PanelLeft, LogOut } from "lucide-react";
+import { MessageSquare, PieChart, Clock, Wallet, Settings, Menu, X, LogOut, Sun, Moon } from "lucide-react";
 import { api } from "@/lib/api";
+import Image from "next/image";
 
 export default function Sidebar({ userProfile }: { userProfile: any }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
+    const saved = localStorage.getItem("theme");
+    const isDark = saved === "dark";
+    setDarkMode(isDark);
+    document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
+
     const isCollapsed = localStorage.getItem("sidebarCollapsed") === "true";
     setCollapsed(isCollapsed);
   }, []);
+
+  const toggleTheme = () => {
+    const next = !darkMode;
+    setDarkMode(next);
+    localStorage.setItem("theme", next ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", next ? "dark" : "light");
+  };
 
   const toggleSidebar = () => {
     const newVal = !collapsed;
@@ -25,10 +40,8 @@ export default function Sidebar({ userProfile }: { userProfile: any }) {
   const handleLogout = async () => {
     try {
       await api("/auth/logout", { method: "POST" });
-      router.push("/login");
-    } catch {
-      router.push("/login");
-    }
+    } catch {}
+    router.push("/login");
   };
 
   const navItems = [
@@ -39,92 +52,112 @@ export default function Sidebar({ userProfile }: { userProfile: any }) {
     { href: "/app/settings", icon: Settings, label: "Settings" },
   ];
 
-  return (
-    <nav
-      className={`flex flex-col h-screen transition-all duration-300 ease-in-out border-r ${
-        collapsed ? "w-[72px]" : "w-64"
-      }`}
-      style={{
-        background: 'rgba(255, 255, 255, 0.03)',
-        borderColor: 'rgba(255, 255, 255, 0.06)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-      }}
-    >
+  const navContent = (
+    <>
       {/* Header */}
-      <div className="flex items-center justify-between p-4 h-16" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
-        {!collapsed && (
-          <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shrink-0" style={{ boxShadow: '0 4px 16px rgba(99, 102, 241, 0.3)' }}>
-              <span className="text-sm">🐾</span>
-            </div>
-            <span className="font-bold text-lg text-ink tracking-tight whitespace-nowrap">Jerry</span>
-          </div>
-        )}
-        <button
-          onClick={toggleSidebar}
-          className="p-2 rounded-lg text-muted hover:text-ink hover:bg-white/5 transition-all duration-200"
-        >
-          {collapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
+      <div className="flex items-center justify-between p-3 h-14 border-b border-line">
+        <div className="flex items-center gap-2 overflow-hidden">
+          <Image src="/jerry-icon.png" alt="Jerry" width={28} height={28} className="rounded-lg shrink-0" />
+          {(!collapsed || mobileOpen) && <span className="font-bold text-base text-ink whitespace-nowrap">Jerry</span>}
+        </div>
+        {/* Desktop collapse toggle */}
+        <button onClick={toggleSidebar} className="hidden md:block p-1.5 rounded-lg text-muted hover:text-ink hover:bg-surface-alt transition-colors">
+          <Menu size={16} />
+        </button>
+        {/* Mobile close */}
+        <button onClick={() => setMobileOpen(false)} className="md:hidden p-1.5 rounded-lg text-muted hover:text-ink">
+          <X size={16} />
         </button>
       </div>
 
-      {/* Navigation */}
-      <div className="flex-1 py-3 flex flex-col gap-1 px-3 overflow-y-auto">
+      {/* Nav links */}
+      <div className="flex-1 py-2 flex flex-col gap-0.5 px-2 overflow-y-auto">
         {navItems.map((item) => {
           const active = pathname === item.href;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 relative ${
+              onClick={() => setMobileOpen(false)}
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
                 active
-                  ? "text-white"
-                  : "text-muted hover:text-ink hover:bg-white/5"
+                  ? "bg-primary-light text-primary font-semibold"
+                  : "text-muted hover:text-ink hover:bg-surface-alt"
               }`}
             >
-              {active && (
-                <div
-                  className="absolute inset-0 rounded-xl"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(139, 92, 246, 0.15))',
-                    border: '1px solid rgba(99, 102, 241, 0.2)',
-                  }}
-                />
-              )}
-              <item.icon size={19} className="shrink-0 relative z-10" />
-              {!collapsed && (
-                <span className="font-medium text-sm whitespace-nowrap relative z-10">{item.label}</span>
-              )}
+              <item.icon size={18} className="shrink-0" />
+              {(!collapsed || mobileOpen) && <span className="whitespace-nowrap">{item.label}</span>}
             </Link>
           );
         })}
       </div>
 
-      {/* User section */}
-      <div className="p-3" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
-        <div className="flex items-center gap-3 p-2 mb-2 overflow-hidden">
-          <div
-            className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-md"
-            style={{ background: 'linear-gradient(135deg, #6366f1, #a78bfa)' }}
-          >
+      {/* Footer */}
+      <div className="p-2 border-t border-line">
+        {/* Theme toggle */}
+        <button
+          onClick={toggleTheme}
+          className="flex items-center gap-2.5 px-3 py-2 w-full rounded-lg text-sm text-muted hover:text-ink hover:bg-surface-alt transition-colors mb-0.5"
+        >
+          {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+          {(!collapsed || mobileOpen) && <span>{darkMode ? "Light mode" : "Dark mode"}</span>}
+        </button>
+
+        {/* User info */}
+        <div className="flex items-center gap-2.5 px-3 py-2 overflow-hidden">
+          <div className="w-7 h-7 shrink-0 bg-primary rounded-full flex items-center justify-center text-white text-xs font-bold">
             {userProfile?.avatar || userProfile?.name?.charAt(0).toUpperCase() || "U"}
           </div>
-          {!collapsed && (
-            <div className="flex flex-col whitespace-nowrap overflow-hidden">
-              <span className="font-semibold text-sm text-ink truncate">{userProfile?.name || "User"}</span>
-              <span className="text-xs text-muted">Free plan</span>
-            </div>
+          {(!collapsed || mobileOpen) && (
+            <span className="text-sm font-medium text-ink truncate">{userProfile?.name || "User"}</span>
           )}
         </div>
+
+        {/* Logout */}
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2.5 w-full rounded-xl text-muted hover:text-danger hover:bg-danger/10 transition-all duration-200"
+          className="flex items-center gap-2.5 px-3 py-2 w-full rounded-lg text-sm text-muted hover:text-danger hover:bg-danger/10 transition-colors"
         >
           <LogOut size={18} className="shrink-0" />
-          {!collapsed && <span className="font-medium text-sm whitespace-nowrap">Sign out</span>}
+          {(!collapsed || mobileOpen) && <span>Sign out</span>}
         </button>
       </div>
-    </nav>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile hamburger button */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="md:hidden fixed top-3 left-3 z-50 p-2 rounded-lg bg-surface border border-line text-ink shadow-sm"
+        aria-label="Open menu"
+      >
+        <Menu size={20} />
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div className="md:hidden fixed inset-0 z-40 bg-black/40" onClick={() => setMobileOpen(false)} />
+      )}
+
+      {/* Mobile drawer */}
+      <nav
+        className={`md:hidden fixed top-0 left-0 z-50 h-full w-64 bg-surface border-r border-line flex flex-col transition-transform duration-200 ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        {navContent}
+      </nav>
+
+      {/* Desktop sidebar */}
+      <nav
+        className={`hidden md:flex flex-col h-screen bg-surface border-r border-line transition-all duration-200 ${
+          collapsed ? "w-[60px]" : "w-56"
+        }`}
+      >
+        {navContent}
+      </nav>
+    </>
   );
 }
