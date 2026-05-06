@@ -16,7 +16,7 @@ class ProviderUnavailableError(RuntimeError):
 
 class LLMProvider(ABC):
     @abstractmethod
-    async def complete_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    async def complete_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any] | list:
         raise NotImplementedError
 
     @abstractmethod
@@ -24,15 +24,42 @@ class LLMProvider(ABC):
         raise NotImplementedError
 
 
-def parse_json_response(raw_text: str) -> dict[str, Any]:
+def parse_json_response(raw_text: str) -> dict[str, Any] | list:
     text = clean_model_text(raw_text)
     if text.startswith("```"):
         text = text.strip("`")
         text = text.removeprefix("json").strip()
-    if not text.startswith("{"):
-        match = re.search(r"\{.*\}", text, flags=re.DOTALL)
-        if match:
-            text = match.group(0)
+    
+    # Try to find JSON array or object
+    stripped = text.strip()
+    
+    def try_parse(s):
+        try:
+            data = json.loads(s)
+            # If it's a dict with exactly one key that is a list, return that list
+            if isinstance(data, dict) and len(data) == 1:
+                val = next(iter(data.values()))
+                if isinstance(val, list):
+                    return val
+            return data
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+    if stripped.startswith("[") or stripped.startswith("{"):
+        result = try_parse(stripped)
+        if result is not None: return result
+
+    # Fallback: search for array first, then object
+    array_match = re.search(r"\[.*\]", text, flags=re.DOTALL)
+    if array_match:
+        result = try_parse(array_match.group(0))
+        if result is not None: return result
+        
+    obj_match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+    if obj_match:
+        result = try_parse(obj_match.group(0))
+        if result is not None: return result
+        
     return json.loads(text)
 
 
@@ -53,7 +80,7 @@ class GroqProvider(LLMProvider):
         self.client = AsyncGroq(api_key=api_key)
         self.model = model
 
-    async def complete_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    async def complete_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any] | list:
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=[
@@ -159,7 +186,7 @@ class ProviderChain:
     def __init__(self, providers: list[LLMProvider]):
         self.providers = providers
 
-    async def complete_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    async def complete_json(self, system_prompt: str, user_prompt: str) -> dict[str, Any] | list:
         last_error: Exception | None = None
         for provider in self.providers:
             try:

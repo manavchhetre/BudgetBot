@@ -31,13 +31,14 @@ class BudgetTextInterpreter:
         system_prompt = (
             f"{current_date_context()}\n"
             "Classify a personal budgeting chatbot message. Return JSON only with key intent. "
-            "Allowed intents: add_transaction, edit_transaction, delete_transaction, analytics_query, general_chat.\n"
+            "Allowed intents: add_transaction, edit_transaction, delete_transaction, analytics_query, general_chat, update_profile.\n"
             "IMPORTANT RULES:\n"
             "- Only use add_transaction when the user is CLEARLY reporting one or more specific expenses with amounts.\n"
             "- If the user is chatting casually, greeting, thanking, asking questions, or making conversation, use general_chat.\n"
             "- If the user asks about their spending, budget, or financial data, use analytics_query.\n"
             "- If the user wants to change/update/correct a past transaction, use edit_transaction.\n"
             "- If the user wants to remove/delete a transaction, use delete_transaction.\n"
+            "- If the user is mentioning their name, income, or setting an avatar (e.g., 'my income is 50k', 'call me John'), use update_profile.\n"
             "If edit_transaction or delete_transaction, also extract 'merchant' and 'category' if mentioned, and 'amount' if edit_transaction."
         )
         try:
@@ -52,7 +53,7 @@ class BudgetTextInterpreter:
         system_prompt = (
             f"{current_date_context()}\n"
             "Extract ALL expense transactions from the user's message. The user may mention multiple expenses in one message.\n"
-            "Return a JSON array of objects. Each object has keys: "
+            "Return a JSON array of objects (or an object with a 'transactions' key). Each object has keys: "
             "amount (number or null), currency (string), merchant (string or null), category (string or null), "
             "date (ISO datetime or null), notes (string or null).\n"
             "Use INR unless another currency is explicit. "
@@ -70,8 +71,12 @@ class BudgetTextInterpreter:
 
             drafts = []
             for item in data:
+                if not isinstance(item, dict): continue
                 if item.get("date"):
-                    item["date"] = datetime.fromisoformat(str(item["date"]).replace("Z", "+00:00"))
+                    try:
+                        item["date"] = datetime.fromisoformat(str(item["date"]).replace("Z", "+00:00"))
+                    except:
+                        item["date"] = app_now()
                 merchant = item.get("merchant")
                 category = await self.categorizer.categorize(merchant, message, item.get("category"))
                 item["category"] = category.category
@@ -79,6 +84,16 @@ class BudgetTextInterpreter:
             return drafts if drafts else [await self._extract_with_rules(message)]
         except Exception:
             return [await self._extract_with_rules(message)]
+
+    async def extract_profile_update(self, message: str) -> dict[str, Any]:
+        system_prompt = (
+            "Extract user profile details from the message. Return JSON with keys: "
+            "name (string or null), monthly_income (number or null), avatar (emoji string or null)."
+        )
+        try:
+            return await self.provider_chain.complete_json(system_prompt, message)
+        except:
+            return {}
 
     async def answer_general(
         self,
@@ -93,18 +108,22 @@ class BudgetTextInterpreter:
             f"{current_date_context()}\n"
             "You are Jerry, a friendly and conversational AI budget assistant. "
             "You're like a smart friend who happens to know everything about the user's finances.\n\n"
-            "PERSONALITY:\n"
-            "- Be warm, casual, and helpful\n"
-            "- Use a conversational tone — not robotic or corporate\n"
-            "- When the user greets you or makes casual conversation, respond naturally\n"
-            "- Don't force financial advice unless asked or relevant\n"
-            "- If the user says 'hi' or 'how are you', just chat — don't immediately push expense tracking\n\n"
+            "PERSONALITY & TONE:\n"
+            "- Be warm, casual, and helpful. Use emojis occasionally. 😊\n"
+            "- Use a conversational tone — not robotic or corporate.\n"
+            "- BE PROACTIVE: If the user hasn't set a budget, recommend creating one. "
+            "If they seem to be overspending, gently suggest a limit. "
+            "If they are new, explain how you can help (tracking, analytics, budgets).\n"
+            "- If the user doesn't know what they want, pitch them on features like 'I can set a monthly budget for you' or 'Want me to analyze your top spending categories?'.\n\n"
+            "GUARDRAILS:\n"
+            "- Only answer questions related to personal finance, budgeting, and the app's features.\n"
+            "- If asked something completely unrelated (like politics or complex science), politely redirect: "
+            "'I'm mostly focused on helping you manage your money! Let's get back to your budget.'\n\n"
             "CAPABILITIES:\n"
-            "- You have full context of the user's stored expenses, income, and budgets\n"
-            "- Use transaction history for financial guidance when relevant\n"
-            "- Mention dates when useful\n"
-            "- Keep answers practical and actionable when giving financial advice\n"
-            "- Use markdown formatting (bold, lists, tables) to make responses clear and readable"
+            "- You have full context of the user's stored expenses, income, and budgets.\n"
+            "- Use transaction history for financial guidance when relevant.\n"
+            "- Mention dates when useful.\n"
+            "- Use markdown formatting (bold, lists, tables) to make responses clear and readable."
         )
         transcript = "\n".join(f"{item['role']}: {item['content']}" for item in history[-8:])
         expense_lines = "\n".join(
@@ -116,13 +135,15 @@ class BudgetTextInterpreter:
         remaining = summary.get("remaining_budget")
         user_summary = user_profile.get("user_summary")
         
-        financial_context = f"Monthly Income: {income if income else 'Not set'}"
+        financial_context = f"User Name: {user_profile.get('name') or 'Not set'}\nMonthly Income: {income if income else 'Not set'}"
         if remaining is not None:
             financial_context += f"\nRemaining Budget this month: {remaining}"
             
         if budgets:
-            budget_str = "\n".join(f"- {b['category']}: Limit {b['limit_amount']}" for b in budgets)
+            budget_str = "\n".join(f"- {b['category']}: Limit {b['limit_amount']} (Spent {b['spent_amount']})" for b in budgets)
             financial_context += f"\n\nCategory Budgets:\n{budget_str}"
+        else:
+            financial_context += "\n\nCategory Budgets: None set. (PROMPT USER TO CREATE ONE)"
             
         prompt = (
             f"User Profile Summary:\n{user_summary or 'No additional context.'}\n\n"
@@ -133,7 +154,7 @@ class BudgetTextInterpreter:
         try:
             return await self.provider_chain.complete_text(system_prompt, prompt)
         except ProviderUnavailableError:
-            return "Hey! I'm here to help with your budget. Try telling me about an expense like 'I spent 450 on lunch at Cafe Coffee Day', or ask me anything about your spending! 😊"
+            return "Hey! I'm here to help with your budget. I can track expenses, set budgets, and show you exactly where your money goes. Why don't we start by setting a monthly income or adding your first expense? 😊"
 
     async def update_user_summary(self, current_summary: str | None, message: str) -> str:
         system_prompt = (
@@ -151,23 +172,13 @@ class BudgetTextInterpreter:
 
     def _classify_with_rules(self, message: str) -> Intent:
         lowered = message.lower()
-        analytics_terms = [
-            "summary",
-            "analytics",
-            "most",
-            "total",
-            "where",
-            "how much",
-            "date-wise",
-            "date wise",
-            "daily",
-            "spending",
-            "spent recently",
-        ]
+        analytics_terms = ["summary", "analytics", "most", "total", "where", "how much", "daily", "spending"]
         if "?" in message or any(word in lowered for word in analytics_terms):
             return Intent.analytics_query
         if any(word in lowered for word in ["spent", "paid", "bought", "expense", "transaction"]):
             return Intent.add_transaction
+        if any(word in lowered for word in ["income", "name", "call me"]):
+            return Intent.update_profile
         if re.search(r"(rs\.?|inr|\u20b9|\$)\s*\d+|\d+\s*(rs|rupees|inr|dollars)", lowered):
             return Intent.add_transaction
         return Intent.general_chat

@@ -6,8 +6,6 @@ import { Download, Check } from "lucide-react";
 
 export default function SettingsPage() {
   const [name, setName] = useState("");
-  const [avatar, setAvatar] = useState("");
-  const [income, setIncome] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -16,8 +14,6 @@ export default function SettingsPage() {
       try {
         const data = await api("/api/me");
         setName(data.name || "");
-        setAvatar(data.avatar || "");
-        setIncome(data.monthly_income?.toString() || "");
       } catch (err) { console.error(err); }
     }
     load();
@@ -29,7 +25,7 @@ export default function SettingsPage() {
     try {
       await api("/api/user/profile", {
         method: "PUT",
-        body: JSON.stringify({ name, avatar, monthly_income: income ? parseFloat(income) : null }),
+        body: JSON.stringify({ name }),
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -55,14 +51,9 @@ export default function SettingsPage() {
               <label className="block text-sm font-medium text-ink-secondary mb-1.5">Name</label>
               <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="input-field" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-ink-secondary mb-1.5">Avatar (emoji)</label>
-              <input type="text" value={avatar} onChange={(e) => setAvatar(e.target.value)} maxLength={2} placeholder="😊" className="input-field" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink-secondary mb-1.5">Monthly income (₹)</label>
-              <input type="number" value={income} onChange={(e) => setIncome(e.target.value)} placeholder="50000" className="input-field" />
-            </div>
+            <p className="text-[11px] text-muted -mt-1 italic">
+              Note: You can update your monthly income and avatar directly by chatting with Jerry! Just say "my income is 50000".
+            </p>
             <button type="submit" disabled={saving} className="btn-primary w-full sm:w-auto">
               {saving ? "Saving…" : saved ? <span className="flex items-center justify-center gap-1.5"><Check size={15} /> Saved</span> : "Save"}
             </button>

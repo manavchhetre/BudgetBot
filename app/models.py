@@ -11,6 +11,7 @@ class Intent(str, Enum):
     delete_transaction = "delete_transaction"
     analytics_query = "analytics_query"
     general_chat = "general_chat"
+    update_profile = "update_profile"
 
 
 class UserCreate(BaseModel):

@@ -65,6 +65,7 @@ class BudgetAgent:
         graph.add_node("clarify_transaction", self._clarify_transaction)
         graph.add_node("edit_transaction", self._edit_transaction)
         graph.add_node("delete_transaction", self._delete_transaction)
+        graph.add_node("update_profile", self._update_profile)
         graph.add_node("answer_analytics", self._answer_analytics)
         graph.add_node("answer_general", self._answer_general)
 
@@ -77,6 +78,7 @@ class BudgetAgent:
                 "extract_transaction": "extract_transaction",
                 "edit_transaction": "edit_transaction",
                 "delete_transaction": "delete_transaction",
+                "update_profile": "update_profile",
                 "answer_analytics": "answer_analytics",
                 "answer_general": "answer_general",
             },
@@ -93,6 +95,7 @@ class BudgetAgent:
         graph.add_edge("clarify_transaction", END)
         graph.add_edge("edit_transaction", END)
         graph.add_edge("delete_transaction", END)
+        graph.add_edge("update_profile", END)
         graph.add_edge("answer_analytics", END)
         graph.add_edge("answer_general", END)
         return graph.compile()
@@ -138,8 +141,8 @@ class BudgetAgent:
         if len(saved_items) == 1:
             s = saved_items[0]
             state["response"] = (
-                f"Recorded {s['currency']} {s['amount']:.2f} spent at {s['merchant']} "
-                f"under {s['category']}."
+                f"Recorded **{s['currency']} {s['amount']:.2f}** spent at **{s['merchant']}** "
+                f"under **{s['category']}**. Your updated remaining budget is ₹{state['summary'].get('remaining_budget', 0):.2f}."
             )
         else:
             lines = []
@@ -187,8 +190,8 @@ class BudgetAgent:
         for draft in invalid_drafts:
             missing = draft.missing_required_fields()
             readable = " and ".join(missing)
-            merchant_hint = f" for the {draft.merchant} expense" if draft.merchant else ""
-            parts.append(f"I still need the **{readable}**{merchant_hint}. Could you send it?")
+            merchant_hint = f" for the '{draft.merchant}' expense" if draft.merchant else ""
+            parts.append(f"I still need the **{readable}**{merchant_hint}. Could you tell me?")
 
         state["response"] = "\n\n".join(parts)
         return state
@@ -202,9 +205,9 @@ class BudgetAgent:
             merchant=data.get("merchant")
         )
         if success:
-            state["response"] = "I've successfully updated that recent transaction for you."
+            state["response"] = "I've successfully updated that recent transaction for you. ✅"
         else:
-            state["response"] = "I couldn't find a recent transaction matching that description to update."
+            state["response"] = "I couldn't find a recent transaction matching that description to update. Try being more specific about the merchant name."
         return state
 
     async def _delete_transaction(self, state: BudgetAgentState) -> BudgetAgentState:
@@ -215,15 +218,37 @@ class BudgetAgent:
             merchant=data.get("merchant")
         )
         if success:
-            state["response"] = "I've successfully deleted that recent transaction."
+            state["response"] = "I've successfully deleted that recent transaction. 🗑️"
         else:
             state["response"] = "I couldn't find a recent transaction matching that description to delete."
+        return state
+
+    async def _update_profile(self, state: BudgetAgentState) -> BudgetAgentState:
+        profile_data = await self.interpreter.extract_profile_update(state["message"])
+        if profile_data:
+            await self.repository.update_user_profile(
+                state["user_id"],
+                name=profile_data.get("name"),
+                avatar=profile_data.get("avatar"),
+                monthly_income=profile_data.get("monthly_income")
+            )
+            updates = []
+            if profile_data.get("name"): updates.append(f"name to **{profile_data['name']}**")
+            if profile_data.get("monthly_income"): updates.append(f"monthly income to **₹{profile_data['monthly_income']}**")
+            if profile_data.get("avatar"): updates.append(f"avatar to **{profile_data['avatar']}**")
+            
+            if updates:
+                state["response"] = f"Got it! I've updated your {', '.join(updates)}. All set! 👍"
+            else:
+                state["response"] = "I heard you mention your profile, but I couldn't catch the exact details. What would you like to update?"
+        else:
+            state["response"] = "I couldn't extract the profile details. Could you tell me your income or name again?"
         return state
 
     async def _answer_analytics(self, state: BudgetAgentState) -> BudgetAgentState:
         summary = await self.repository.analytics_summary(state["user_id"])
         if summary["transaction_count"] == 0:
-            state["response"] = "I do not have any transactions for you yet. Add an expense and I can summarize it."
+            state["response"] = "I don't have any transactions for you yet. Once you add some, I can show you detailed analytics! 📊"
             return state
         top_category = summary["top_category"] or "Uncategorized"
         top_merchant = summary["top_merchant"] or "Unknown"
@@ -261,14 +286,14 @@ class BudgetAgent:
             return "edit_transaction"
         if state["intent"] == Intent.delete_transaction:
             return "delete_transaction"
+        if state["intent"] == Intent.update_profile:
+            return "update_profile"
         if state["intent"] == Intent.analytics_query:
             return "answer_analytics"
         return "answer_general"
 
     def _route_transaction(self, state: BudgetAgentState) -> str:
         drafts = state["drafts"]
-        # If ALL drafts have missing fields, clarify
-        # If some are valid and some aren't, also go to clarify (it will save the valid ones)
         all_valid = all(not d.missing_required_fields() for d in drafts)
         if all_valid:
             return "persist_transaction"
