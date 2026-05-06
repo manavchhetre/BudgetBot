@@ -49,6 +49,7 @@ class ChatResponse(BaseModel):
     message: str
     intent: Intent
     transaction_saved: bool = False
+    transactions_saved_count: int = 0
     needs_clarification: bool = False
 
 

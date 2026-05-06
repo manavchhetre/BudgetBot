@@ -15,13 +15,29 @@ class BudgetTextInterpreter:
 
     async def classify_intent(self, message: str) -> dict[str, Any]:
         lowered = message.strip().lower()
-        if lowered in ["hi", "hello", "hey", "yo", "greetings", "hi there", "hello there", "hey jerry", "hi jerry"]:
+        # Expanded list of casual/conversational phrases that should NOT trigger transaction entry
+        casual_phrases = [
+            "hi", "hello", "hey", "yo", "greetings", "hi there", "hello there",
+            "hey jerry", "hi jerry", "hello jerry", "thanks", "thank you",
+            "thanks jerry", "thank you jerry", "ok", "okay", "cool", "nice",
+            "great", "awesome", "got it", "sure", "yes", "no", "nope",
+            "good morning", "good evening", "good night", "gm", "gn",
+            "what's up", "wassup", "sup", "how are you", "how's it going",
+            "bye", "goodbye", "see you", "later", "rest?", "rest",
+        ]
+        if lowered in casual_phrases:
             return {"intent": Intent.general_chat}
 
         system_prompt = (
             f"{current_date_context()}\n"
             "Classify a personal budgeting chatbot message. Return JSON only with key intent. "
             "Allowed intents: add_transaction, edit_transaction, delete_transaction, analytics_query, general_chat.\n"
+            "IMPORTANT RULES:\n"
+            "- Only use add_transaction when the user is CLEARLY reporting one or more specific expenses with amounts.\n"
+            "- If the user is chatting casually, greeting, thanking, asking questions, or making conversation, use general_chat.\n"
+            "- If the user asks about their spending, budget, or financial data, use analytics_query.\n"
+            "- If the user wants to change/update/correct a past transaction, use edit_transaction.\n"
+            "- If the user wants to remove/delete a transaction, use delete_transaction.\n"
             "If edit_transaction or delete_transaction, also extract 'merchant' and 'category' if mentioned, and 'amount' if edit_transaction."
         )
         try:
@@ -31,24 +47,38 @@ class BudgetTextInterpreter:
         except (ProviderUnavailableError, ValueError, KeyError):
             return {"intent": self._classify_with_rules(message)}
 
-    async def extract_transaction(self, message: str) -> TransactionDraft:
+    async def extract_transactions(self, message: str) -> list[TransactionDraft]:
+        """Extract one or more transactions from a single user message."""
         system_prompt = (
             f"{current_date_context()}\n"
-            "Extract one expense transaction from the user's message. Return JSON only with keys: "
-            "amount number or null, currency string, merchant string or null, category string or null, "
-            "date ISO datetime or null, notes string or null. Use INR unless another currency is explicit. "
-            "Resolve relative dates such as today, yesterday, this morning, and last night using the current date."
+            "Extract ALL expense transactions from the user's message. The user may mention multiple expenses in one message.\n"
+            "Return a JSON array of objects. Each object has keys: "
+            "amount (number or null), currency (string), merchant (string or null), category (string or null), "
+            "date (ISO datetime or null), notes (string or null).\n"
+            "Use INR unless another currency is explicit. "
+            "Resolve relative dates such as today, yesterday, this morning, and last night using the current date.\n"
+            "Even if there is only one transaction, still return it inside an array.\n"
+            "Example: [{\"amount\": 500, \"currency\": \"INR\", \"merchant\": \"Cafe Coffee Day\", \"category\": \"Food\", \"date\": null, \"notes\": null}]"
         )
         try:
             data = await self.provider_chain.complete_json(system_prompt, message)
-            if data.get("date"):
-                data["date"] = datetime.fromisoformat(str(data["date"]).replace("Z", "+00:00"))
-            merchant = data.get("merchant")
-            category = await self.categorizer.categorize(merchant, message, data.get("category"))
-            data["category"] = category.category
-            return TransactionDraft(**data)
+            # Handle both array and single object responses
+            if isinstance(data, dict):
+                data = [data]
+            if not isinstance(data, list):
+                return [await self._extract_with_rules(message)]
+
+            drafts = []
+            for item in data:
+                if item.get("date"):
+                    item["date"] = datetime.fromisoformat(str(item["date"]).replace("Z", "+00:00"))
+                merchant = item.get("merchant")
+                category = await self.categorizer.categorize(merchant, message, item.get("category"))
+                item["category"] = category.category
+                drafts.append(TransactionDraft(**item))
+            return drafts if drafts else [await self._extract_with_rules(message)]
         except Exception:
-            return await self._extract_with_rules(message)
+            return [await self._extract_with_rules(message)]
 
     async def answer_general(
         self,
@@ -61,8 +91,20 @@ class BudgetTextInterpreter:
     ) -> str:
         system_prompt = (
             f"{current_date_context()}\n"
-            "You are Budget Bot, a concise financial assistant. You have context of the user's stored expenses. "
-            "Use transaction history for financial guidance, mention dates when useful, and keep answers practical."
+            "You are Jerry, a friendly and conversational AI budget assistant. "
+            "You're like a smart friend who happens to know everything about the user's finances.\n\n"
+            "PERSONALITY:\n"
+            "- Be warm, casual, and helpful\n"
+            "- Use a conversational tone — not robotic or corporate\n"
+            "- When the user greets you or makes casual conversation, respond naturally\n"
+            "- Don't force financial advice unless asked or relevant\n"
+            "- If the user says 'hi' or 'how are you', just chat — don't immediately push expense tracking\n\n"
+            "CAPABILITIES:\n"
+            "- You have full context of the user's stored expenses, income, and budgets\n"
+            "- Use transaction history for financial guidance when relevant\n"
+            "- Mention dates when useful\n"
+            "- Keep answers practical and actionable when giving financial advice\n"
+            "- Use markdown formatting (bold, lists, tables) to make responses clear and readable"
         )
         transcript = "\n".join(f"{item['role']}: {item['content']}" for item in history[-8:])
         expense_lines = "\n".join(
@@ -91,7 +133,7 @@ class BudgetTextInterpreter:
         try:
             return await self.provider_chain.complete_text(system_prompt, prompt)
         except ProviderUnavailableError:
-            return "I can track expenses and summarize your spending. Try: 'I spent 450 on lunch at Cafe Coffee Day'."
+            return "Hey! I'm here to help with your budget. Try telling me about an expense like 'I spent 450 on lunch at Cafe Coffee Day', or ask me anything about your spending! 😊"
 
     async def update_user_summary(self, current_summary: str | None, message: str) -> str:
         system_prompt = (

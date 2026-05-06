@@ -1,34 +1,31 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Send } from "lucide-react";
+import { Send, Plus } from "lucide-react";
 import { api } from "@/lib/api";
 import Image from "next/image";
+import ReactMarkdown from "react-markdown";
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<{ role: string; content: string; created_at?: string }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    async function loadHistory() {
-      try {
-        const convos = await api("/api/conversations");
-        if (convos && convos.length > 0) {
-          const hist = await api(`/api/conversations/${convos[0].id}/messages`);
-          setMessages(hist.reverse());
-        }
-      } catch (err) {
-        console.error("Failed to load chat history", err);
-      }
-    }
-    loadHistory();
-  }, []);
+  // Always start with a fresh chat — no history loading on mount
+  // Users can view past conversations in the History tab
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  const handleNewChat = () => {
+    setMessages([]);
+    setConversationId(null);
+    setInput("");
+    setLoading(false);
+  };
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,8 +39,15 @@ export default function ChatPage() {
     try {
       const res = await api("/api/chat", {
         method: "POST",
-        body: JSON.stringify({ message: userMsg }),
+        body: JSON.stringify({
+          message: userMsg,
+          conversation_id: conversationId,
+        }),
       });
+      // Track conversation ID from first response
+      if (res.conversation_id && !conversationId) {
+        setConversationId(res.conversation_id);
+      }
       setMessages((prev) => [...prev, { role: "assistant", content: res.message, created_at: new Date().toISOString() }]);
     } catch {
       setMessages((prev) => [...prev, { role: "assistant", content: "Sorry, something went wrong. Please try again." }]);
@@ -60,8 +64,16 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <header className="px-4 sm:px-6 h-14 flex items-center border-b border-line bg-surface shrink-0">
+      <header className="px-4 sm:px-6 h-14 flex items-center justify-between border-b border-line bg-surface shrink-0">
         <h2 className="text-sm font-semibold text-ink">Chat</h2>
+        <button
+          onClick={handleNewChat}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary bg-primary-light rounded-lg hover:bg-primary/20 transition-colors"
+          title="Start a new conversation"
+        >
+          <Plus size={14} />
+          <span className="hidden sm:inline">New Chat</span>
+        </button>
       </header>
 
       {/* Messages */}
@@ -71,10 +83,10 @@ export default function ChatPage() {
             <Image src="/jerry-icon.png" alt="Jerry" width={64} height={64} className="mb-4 rounded-2xl" />
             <h3 className="text-lg font-bold text-ink mb-1">Hi! I&apos;m Jerry</h3>
             <p className="text-muted text-sm max-w-xs leading-relaxed mb-4">
-              Your AI budget assistant. Tell me about your expenses and I&apos;ll help you track them.
+              Your AI budget assistant. Tell me about your expenses, ask about your spending, or just chat!
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
-              {["I spent ₹500 on coffee", "Show my budget", "How much did I spend?"].map((s) => (
+              {["I spent ₹500 on coffee", "Show my budget", "Hey Jerry, how are you?"].map((s) => (
                 <button
                   key={s}
                   onClick={() => setInput(s)}
@@ -100,7 +112,13 @@ export default function ChatPage() {
                     : "card rounded-bl-md"
                 }`}
               >
-                <div className="whitespace-pre-wrap">{msg.content}</div>
+                {msg.role === "assistant" ? (
+                  <div className="markdown-body">
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                )}
               </div>
               <span className="text-[10px] text-muted mt-1 px-1 block">{formatTime(msg.created_at)}</span>
             </div>

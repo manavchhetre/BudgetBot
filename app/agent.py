@@ -19,9 +19,10 @@ class BudgetAgentState(TypedDict, total=False):
     summary: dict[str, Any]
     intent: Intent
     extracted_data: dict[str, Any]
-    draft: TransactionDraft
+    drafts: list[TransactionDraft]
     response: str
     transaction_saved: bool
+    transactions_saved_count: int
     needs_clarification: bool
 
 
@@ -51,6 +52,7 @@ class BudgetAgent:
             message=state["response"],
             intent=state["intent"],
             transaction_saved=state.get("transaction_saved", False),
+            transactions_saved_count=state.get("transactions_saved_count", 0),
             needs_clarification=state.get("needs_clarification", False),
         )
 
@@ -110,35 +112,85 @@ class BudgetAgent:
         return state
 
     async def _extract_transaction(self, state: BudgetAgentState) -> BudgetAgentState:
-        state["draft"] = await self.interpreter.extract_transaction(state["message"])
+        state["drafts"] = await self.interpreter.extract_transactions(state["message"])
         return state
 
     async def _persist_transaction(self, state: BudgetAgentState) -> BudgetAgentState:
-        draft = state["draft"]
-        transaction = TransactionCreate(
-            amount=draft.amount or 0,
-            currency=draft.currency,
-            merchant=draft.merchant or "Unknown",
-            category=draft.category or "Uncategorized",
-            date=draft.date,
-            notes=draft.notes,
-            source_message_id=state["user_message_id"],
-        )
-        saved = await self.repository.create_transaction(state["user_id"], transaction)
+        drafts = state["drafts"]
+        saved_items = []
+        for draft in drafts:
+            transaction = TransactionCreate(
+                amount=draft.amount or 0,
+                currency=draft.currency,
+                merchant=draft.merchant or "Unknown",
+                category=draft.category or "Uncategorized",
+                date=draft.date,
+                notes=draft.notes,
+                source_message_id=state["user_message_id"],
+            )
+            saved = await self.repository.create_transaction(state["user_id"], transaction)
+            saved_items.append(saved)
+
         state["transaction_saved"] = True
+        state["transactions_saved_count"] = len(saved_items)
         state["needs_clarification"] = False
-        state["response"] = (
-            f"Recorded {saved['currency']} {saved['amount']:.2f} spent at {saved['merchant']} "
-            f"under {saved['category']}."
-        )
+
+        if len(saved_items) == 1:
+            s = saved_items[0]
+            state["response"] = (
+                f"Recorded {s['currency']} {s['amount']:.2f} spent at {s['merchant']} "
+                f"under {s['category']}."
+            )
+        else:
+            lines = []
+            for s in saved_items:
+                lines.append(f"- **{s['merchant']}**: {s['currency']} {s['amount']:.2f} ({s['category']})")
+            state["response"] = (
+                f"Got it! I've recorded **{len(saved_items)} transactions**:\n\n"
+                + "\n".join(lines)
+            )
         return state
 
     async def _clarify_transaction(self, state: BudgetAgentState) -> BudgetAgentState:
-        missing = state["draft"].missing_required_fields()
-        readable = " and ".join(missing)
-        state["transaction_saved"] = False
+        drafts = state["drafts"]
+        # Save any complete drafts, clarify incomplete ones
+        valid_drafts = [d for d in drafts if not d.missing_required_fields()]
+        invalid_drafts = [d for d in drafts if d.missing_required_fields()]
+
+        saved_items = []
+        for draft in valid_drafts:
+            transaction = TransactionCreate(
+                amount=draft.amount or 0,
+                currency=draft.currency,
+                merchant=draft.merchant or "Unknown",
+                category=draft.category or "Uncategorized",
+                date=draft.date,
+                notes=draft.notes,
+                source_message_id=state["user_message_id"],
+            )
+            saved = await self.repository.create_transaction(state["user_id"], transaction)
+            saved_items.append(saved)
+
+        state["transaction_saved"] = len(saved_items) > 0
+        state["transactions_saved_count"] = len(saved_items)
         state["needs_clarification"] = True
-        state["response"] = f"I can record that expense, but I need the {readable}. Could you send it?"
+
+        parts = []
+        if saved_items:
+            if len(saved_items) == 1:
+                s = saved_items[0]
+                parts.append(f"Recorded {s['currency']} {s['amount']:.2f} at {s['merchant']} ({s['category']}).")
+            else:
+                lines = [f"- **{s['merchant']}**: {s['currency']} {s['amount']:.2f} ({s['category']})" for s in saved_items]
+                parts.append(f"Recorded **{len(saved_items)} transactions**:\n" + "\n".join(lines))
+
+        for draft in invalid_drafts:
+            missing = draft.missing_required_fields()
+            readable = " and ".join(missing)
+            merchant_hint = f" for the {draft.merchant} expense" if draft.merchant else ""
+            parts.append(f"I still need the **{readable}**{merchant_hint}. Could you send it?")
+
+        state["response"] = "\n\n".join(parts)
         return state
 
     async def _edit_transaction(self, state: BudgetAgentState) -> BudgetAgentState:
@@ -214,9 +266,13 @@ class BudgetAgent:
         return "answer_general"
 
     def _route_transaction(self, state: BudgetAgentState) -> str:
-        if state["draft"].missing_required_fields():
-            return "clarify_transaction"
-        return "persist_transaction"
+        drafts = state["drafts"]
+        # If ALL drafts have missing fields, clarify
+        # If some are valid and some aren't, also go to clarify (it will save the valid ones)
+        all_valid = all(not d.missing_required_fields() for d in drafts)
+        if all_valid:
+            return "persist_transaction"
+        return "clarify_transaction"
 
     def _title_from_message(self, message: str) -> str:
         return message.strip().splitlines()[0][:80] or "New chat"
