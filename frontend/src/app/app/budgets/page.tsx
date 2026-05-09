@@ -4,8 +4,25 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Plus, Trash2 } from "lucide-react";
 
+type CategoryBreakdown = {
+  category: string;
+  amount: number;
+};
+
+type BudgetTracking = {
+  category: string;
+  limit_amount: number;
+  spent_amount: number;
+  remaining_amount: number;
+};
+
+type BudgetSummary = {
+  category_breakdown: CategoryBreakdown[];
+  budget_tracking: BudgetTracking[];
+};
+
 export default function BudgetsPage() {
-  const [summary, setSummary] = useState<any>(null);
+  const [summary, setSummary] = useState<BudgetSummary | null>(null);
   const [category, setCategory] = useState("");
   const [limit, setLimit] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,7 +36,12 @@ export default function BudgetsPage() {
     }
   };
 
-  useEffect(() => { loadBudgets(); }, []);
+  useEffect(() => {
+    async function load() {
+      await loadBudgets();
+    }
+    load();
+  }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +77,7 @@ export default function BudgetsPage() {
               <label className="block text-sm font-medium text-ink-secondary mb-1.5">Category</label>
               <input type="text" list="cats" value={category} onChange={(e) => setCategory(e.target.value)} required placeholder="e.g. Groceries" className="input-field" />
               <datalist id="cats">
-                {summary?.category_breakdown?.map((c: any) => <option key={c.category} value={c.category} />)}
+                {summary?.category_breakdown?.map((c) => <option key={c.category} value={c.category} />)}
               </datalist>
             </div>
             <div className="flex-1 w-full">
@@ -75,7 +97,7 @@ export default function BudgetsPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {summary.budget_tracking.map((b: any) => {
+          {summary.budget_tracking.map((b) => {
             const ratio = Math.min(b.spent_amount / b.limit_amount, 1);
             const pct = (ratio * 100).toFixed(0);
             let barColor = "#10b981"; // green

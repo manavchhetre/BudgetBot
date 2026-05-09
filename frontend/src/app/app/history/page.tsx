@@ -9,15 +9,36 @@ import ReactMarkdown from "react-markdown";
 
 type Tab = "conversations" | "transactions";
 
+type Conversation = {
+  id: string;
+  title?: string;
+  created_at?: string;
+};
+
+type Transaction = {
+  id: string;
+  merchant: string;
+  amount: number;
+  category: string;
+  date: string;
+};
+
+type ConversationMessage = {
+  id?: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at?: string;
+};
+
 export default function HistoryPage() {
   const [activeTab, setActiveTab] = useState<Tab>("conversations");
-  const [conversations, setConversations] = useState<any[]>([]);
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Conversation detail view
-  const [selectedConvo, setSelectedConvo] = useState<any | null>(null);
-  const [convoMessages, setConvoMessages] = useState<any[]>([]);
+  const [selectedConvo, setSelectedConvo] = useState<Conversation | null>(null);
+  const [convoMessages, setConvoMessages] = useState<ConversationMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
 
   useEffect(() => {
@@ -38,7 +59,7 @@ export default function HistoryPage() {
     load();
   }, []);
 
-  const openConversation = async (convo: any) => {
+  const openConversation = async (convo: Conversation) => {
     setSelectedConvo(convo);
     setLoadingMessages(true);
     try {

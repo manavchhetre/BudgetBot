@@ -23,8 +23,8 @@ export default function Register() {
         body: JSON.stringify({ name, email, password }),
       });
       router.push("/app");
-    } catch (err: any) {
-      setError(err.message || "Registration failed");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Registration failed");
     } finally {
       setLoading(false);
     }

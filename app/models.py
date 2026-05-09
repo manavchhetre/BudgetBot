@@ -52,6 +52,7 @@ class ChatResponse(BaseModel):
     transaction_saved: bool = False
     transactions_saved_count: int = 0
     needs_clarification: bool = False
+    artifacts: list[dict[str, Any]] = []
 
 
 class TransactionDraft(BaseModel):

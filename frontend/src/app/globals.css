@@ -230,3 +230,96 @@
   margin: 0.6em 0;
 }
 
+/* Agentic UI artifacts */
+.agent-artifact {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+}
+
+.artifact-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.artifact-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 46px;
+  padding: 9px 10px;
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.artifact-primary {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.artifact-muted {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.artifact-amount {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.artifact-action {
+  background: var(--primary-light);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--primary-hover);
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 6px 10px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.artifact-action:hover {
+  background: var(--surface);
+  border-color: var(--primary);
+}
+
+.artifact-metric {
+  min-width: 0;
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 9px;
+}
+
+.artifact-chart {
+  height: 180px;
+  min-width: 0;
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.artifact-chart-title {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}

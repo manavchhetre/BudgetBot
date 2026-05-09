@@ -4,8 +4,15 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import Sidebar from "@/components/Sidebar";
 
+type UserProfile = {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string | null;
+};
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

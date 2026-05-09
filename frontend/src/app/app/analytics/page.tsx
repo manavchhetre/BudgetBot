@@ -10,8 +10,22 @@ ChartJS.register(ArcElement, Tooltip, Legend);
 
 const CHART_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1'];
 
+type BreakdownItem = {
+  category: string;
+  amount: number;
+  date?: string;
+};
+
+type AnalyticsSummary = {
+  total_spend: number;
+  transaction_count: number;
+  top_category: string | null;
+  category_breakdown: BreakdownItem[];
+  daily_breakdown: Required<Pick<BreakdownItem, "date" | "amount">>[];
+};
+
 export default function AnalyticsPage() {
-  const [summary, setSummary] = useState<any>(null);
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -29,9 +43,9 @@ export default function AnalyticsPage() {
   }
 
   const chartData = {
-    labels: summary.category_breakdown?.map((c: any) => c.category) || [],
+    labels: summary.category_breakdown?.map((c) => c.category) || [],
     datasets: [{
-      data: summary.category_breakdown?.map((c: any) => c.amount) || [],
+      data: summary.category_breakdown?.map((c) => c.amount) || [],
       backgroundColor: CHART_COLORS,
       borderWidth: 0,
       hoverOffset: 6,
@@ -83,7 +97,7 @@ export default function AnalyticsPage() {
           <h2 className="text-sm font-semibold text-ink mb-4">Daily Breakdown</h2>
           <div className="space-y-0 max-h-56 overflow-y-auto">
             {summary.daily_breakdown?.length > 0 ? (
-              summary.daily_breakdown.map((item: any, i: number) => (
+              summary.daily_breakdown.map((item, i) => (
                 <div key={i} className="flex justify-between items-center py-2.5 border-b border-line last:border-0">
                   <span className="text-sm text-muted">{new Date(item.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
                   <span className="text-sm font-semibold text-ink">₹{item.amount.toFixed(0)}</span>

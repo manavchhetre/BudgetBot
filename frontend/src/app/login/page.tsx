@@ -22,8 +22,8 @@ export default function Login() {
         body: JSON.stringify({ email, password }),
       });
       router.push("/app");
-    } catch (err: any) {
-      setError(err.message || "Invalid credentials");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid credentials");
     } finally {
       setLoading(false);
     }

@@ -52,7 +52,7 @@ export default function SettingsPage() {
               <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="input-field" />
             </div>
             <p className="text-[11px] text-muted -mt-1 italic">
-              Note: You can update your monthly income and avatar directly by chatting with Jerry! Just say "my income is 50000".
+              Note: You can update your monthly income and avatar directly by chatting with Jerry. Try: &quot;my income is 50000&quot;.
             </p>
             <button type="submit" disabled={saving} className="btn-primary w-full sm:w-auto">
               {saving ? "Saving…" : saved ? <span className="flex items-center justify-center gap-1.5"><Check size={15} /> Saved</span> : "Save"}

@@ -8,6 +8,13 @@ from app.models import Intent, TransactionDraft
 from app.providers import ProviderChain, ProviderUnavailableError
 
 
+class IntentClassification(dict):
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Intent):
+            return self.get("intent") == other
+        return super().__eq__(other)
+
+
 class BudgetTextInterpreter:
     def __init__(self, provider_chain: ProviderChain, categorizer: MerchantCategorizer | None = None):
         self.provider_chain = provider_chain
@@ -26,7 +33,7 @@ class BudgetTextInterpreter:
             "bye", "goodbye", "see you", "later", "rest?", "rest",
         ]
         if lowered in casual_phrases:
-            return {"intent": Intent.general_chat}
+            return IntentClassification({"intent": Intent.general_chat})
 
         system_prompt = (
             f"{current_date_context()}\n"
@@ -44,9 +51,18 @@ class BudgetTextInterpreter:
         try:
             data = await self.provider_chain.complete_json(system_prompt, message)
             intent = Intent(data.get("intent", Intent.general_chat))
-            return {"intent": intent, "merchant": data.get("merchant"), "category": data.get("category"), "amount": data.get("amount")}
+            return IntentClassification({"intent": intent, "merchant": data.get("merchant"), "category": data.get("category"), "amount": data.get("amount")})
         except (ProviderUnavailableError, ValueError, KeyError):
-            return {"intent": self._classify_with_rules(message)}
+            intent = self._classify_with_rules(message)
+            data: dict[str, Any] = {"intent": intent}
+            if intent in {Intent.edit_transaction, Intent.delete_transaction}:
+                merchant = self._extract_merchant(message) or self._extract_transaction_reference(message)
+                if merchant and re.search(r"^\d", merchant):
+                    merchant = self._extract_transaction_reference(message)
+                data["merchant"] = merchant
+                data["amount"] = self._extract_amount(message)
+                data["category"] = (await self.categorizer.categorize(merchant, message)).category
+            return IntentClassification(data)
 
     async def extract_transactions(self, message: str) -> list[TransactionDraft]:
         """Extract one or more transactions from a single user message."""
@@ -83,7 +99,11 @@ class BudgetTextInterpreter:
                 drafts.append(TransactionDraft(**item))
             return drafts if drafts else [await self._extract_with_rules(message)]
         except Exception:
-            return [await self._extract_with_rules(message)]
+            return await self._extract_transactions_with_rules(message)
+
+    async def extract_transaction(self, message: str) -> TransactionDraft:
+        """Backward-compatible helper for callers that expect one transaction."""
+        return (await self.extract_transactions(message))[0]
 
     async def extract_profile_update(self, message: str) -> dict[str, Any]:
         system_prompt = (
@@ -91,9 +111,10 @@ class BudgetTextInterpreter:
             "name (string or null), monthly_income (number or null), avatar (emoji string or null)."
         )
         try:
-            return await self.provider_chain.complete_json(system_prompt, message)
+            data = await self.provider_chain.complete_json(system_prompt, message)
+            return data if isinstance(data, dict) else self._extract_profile_update_with_rules(message)
         except:
-            return {}
+            return self._extract_profile_update_with_rules(message)
 
     async def answer_general(
         self,
@@ -140,7 +161,10 @@ class BudgetTextInterpreter:
             financial_context += f"\nRemaining Budget this month: {remaining}"
             
         if budgets:
-            budget_str = "\n".join(f"- {b['category']}: Limit {b['limit_amount']} (Spent {b['spent_amount']})" for b in budgets)
+            budget_str = "\n".join(
+                f"- {b['category']}: Limit {b['limit_amount']} (Spent {b.get('spent_amount', 0.0)})"
+                for b in budgets
+            )
             financial_context += f"\n\nCategory Budgets:\n{budget_str}"
         else:
             financial_context += "\n\nCategory Budgets: None set. (PROMPT USER TO CREATE ONE)"
@@ -172,16 +196,69 @@ class BudgetTextInterpreter:
 
     def _classify_with_rules(self, message: str) -> Intent:
         lowered = message.lower()
-        analytics_terms = ["summary", "analytics", "most", "total", "where", "how much", "daily", "spending"]
+        if any(word in lowered for word in ["delete", "remove", "erase"]):
+            return Intent.delete_transaction
+        if any(word in lowered for word in ["edit", "update", "change", "correct", "fix"]):
+            return Intent.edit_transaction
+        if ("?" not in message and any(word in lowered for word in ["income", "salary", "name", "call me"])):
+            return Intent.update_profile
+        analytics_terms = ["summary", "analytics", "most", "total", "where", "how much", "daily", "spending", "budget"]
+        if "salary" in lowered or "income" in lowered:
+            return Intent.analytics_query
         if "?" in message or any(word in lowered for word in analytics_terms):
             return Intent.analytics_query
         if any(word in lowered for word in ["spent", "paid", "bought", "expense", "transaction"]):
             return Intent.add_transaction
-        if any(word in lowered for word in ["income", "name", "call me"]):
-            return Intent.update_profile
         if re.search(r"(rs\.?|inr|\u20b9|\$)\s*\d+|\d+\s*(rs|rupees|inr|dollars)", lowered):
             return Intent.add_transaction
         return Intent.general_chat
+
+    async def _extract_transactions_with_rules(self, message: str) -> list[TransactionDraft]:
+        clauses = self._split_transaction_clauses(message)
+        drafts = [await self._extract_with_rules(clause) for clause in clauses]
+        return drafts if drafts else [await self._extract_with_rules(message)]
+
+    def _split_transaction_clauses(self, message: str) -> list[str]:
+        parts = re.split(
+            r"\s+\band\b\s+(?=(?:today|yesterday|last night|this morning)?\s*(?:i\s+)?(?:also\s+)?(?:spent|spend|paid|bought|\d))",
+            message,
+            flags=re.IGNORECASE,
+        )
+        clauses = [part.strip(" ,.") for part in parts if part.strip(" ,.")]
+        amount_count = len(re.findall(r"(?:rs\.?|inr|\u20b9|\$)\s*\d+|\d+(?:\.\d+)?\s*(?:rs|rupees|inr|dollars)?", message, flags=re.IGNORECASE))
+        return clauses if len(clauses) > 1 and amount_count > 1 else [message]
+
+    def _extract_profile_update_with_rules(self, message: str) -> dict[str, Any]:
+        data: dict[str, Any] = {}
+        amount_match = re.search(
+            r"(?:income|salary)\s*(?:is|=|:)?\s*(?:rs\.?|inr|\u20b9)?\s*(\d+(?:\.\d+)?)\s*(k|thousand|lakh|lac)?",
+            message,
+            flags=re.IGNORECASE,
+        )
+        if amount_match:
+            amount = float(amount_match.group(1))
+            suffix = (amount_match.group(2) or "").lower()
+            if suffix in {"k", "thousand"}:
+                amount *= 1000
+            elif suffix in {"lakh", "lac"}:
+                amount *= 100000
+            data["monthly_income"] = amount
+
+        name_match = re.search(r"(?:call me|my name is|i am|i'm)\s+([A-Za-z][A-Za-z .'-]{0,79})", message, flags=re.IGNORECASE)
+        if name_match:
+            data["name"] = name_match.group(1).strip(" .")
+        return data
+
+    def _extract_transaction_reference(self, message: str) -> str | None:
+        match = re.search(
+            r"\b(?:update|edit|change|correct|fix|delete|remove|erase)\s+([A-Za-z0-9&.' -]{2,60}?)(?:\s+(?:to|from|for|transaction|expense)\b|\s+\d|$)",
+            message,
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            return None
+        merchant = match.group(1).strip(" .")
+        return merchant or None
 
     async def _extract_with_rules(self, message: str) -> TransactionDraft:
         amount = self._extract_amount(message)

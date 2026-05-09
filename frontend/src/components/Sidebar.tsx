@@ -7,22 +7,31 @@ import { MessageSquare, PieChart, Clock, Wallet, Settings, Menu, X, LogOut, Sun,
 import { api } from "@/lib/api";
 import Image from "next/image";
 
-export default function Sidebar({ userProfile }: { userProfile: any }) {
-  const [collapsed, setCollapsed] = useState(false);
+type UserProfile = {
+  name?: string | null;
+  avatar?: string | null;
+};
+
+function getInitialCollapsed() {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem("sidebarCollapsed") === "true";
+}
+
+function getInitialDarkMode() {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem("theme") === "dark";
+}
+
+export default function Sidebar({ userProfile }: { userProfile: UserProfile | null }) {
+  const [collapsed, setCollapsed] = useState(getInitialCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(getInitialDarkMode);
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
-    const saved = localStorage.getItem("theme");
-    const isDark = saved === "dark";
-    setDarkMode(isDark);
-    document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
-
-    const isCollapsed = localStorage.getItem("sidebarCollapsed") === "true";
-    setCollapsed(isCollapsed);
-  }, []);
+    document.documentElement.setAttribute("data-theme", darkMode ? "dark" : "light");
+  }, [darkMode]);
 
   const toggleTheme = () => {
     const next = !darkMode;

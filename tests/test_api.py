@@ -13,7 +13,7 @@ async def test_register_login_chat_and_analytics_flow():
     app.dependency_overrides[get_repository] = lambda: repository
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with AsyncClient(transport=transport, base_url="https://testserver") as client:
         register = await client.post(
             "/auth/register",
             json={"name": "Omkar", "email": "omkar@example.com", "password": "password123"},
@@ -47,11 +47,11 @@ async def test_authenticated_data_is_isolated_between_users():
     app = create_app()
     app.dependency_overrides[get_repository] = lambda: repository
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as first:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://testserver") as first:
         await first.post("/auth/register", json={"name": "A", "email": "a@example.com", "password": "password123"})
         await first.post("/api/chat", json={"message": "I spent 100 rupees on coffee at Starbucks"})
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as second:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://testserver") as second:
         await second.post("/auth/register", json={"name": "B", "email": "b@example.com", "password": "password123"})
         summary = await second.get("/api/analytics/summary")
 
@@ -65,7 +65,7 @@ async def test_unauthenticated_api_is_rejected():
     app = create_app()
     app.dependency_overrides[get_repository] = lambda: repository
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://testserver") as client:
         response = await client.get("/api/analytics/summary")
 
     assert response.status_code == 401

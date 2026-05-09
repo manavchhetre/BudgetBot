@@ -1,5 +1,13 @@
 const API_BASE = process.env.NODE_ENV === "development" ? "http://localhost:8000" : "";
 
+type ApiValidationError = {
+  msg?: string;
+};
+
+function isValidationErrorArray(value: unknown): value is ApiValidationError[] {
+  return Array.isArray(value);
+}
+
 export async function api(endpoint: string, options: RequestInit = {}) {
   const url = `${API_BASE}${endpoint}`;
   
@@ -22,13 +30,15 @@ export async function api(endpoint: string, options: RequestInit = {}) {
   }
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
+    const errorData = await response.json().catch(() => ({})) as { detail?: unknown };
     let message = `API Error: ${response.status}`;
     if (errorData.detail) {
       if (typeof errorData.detail === "string") {
         message = errorData.detail;
-      } else if (Array.isArray(errorData.detail)) {
-        message = errorData.detail.map((e: any) => e.msg || JSON.stringify(e)).join(", ");
+      } else if (isValidationErrorArray(errorData.detail)) {
+        message = errorData.detail.map((e) => e.msg || JSON.stringify(e)).join(", ");
+      } else {
+        message = JSON.stringify(errorData.detail);
       }
     }
     throw new Error(message);

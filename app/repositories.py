@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+import re
 from typing import Any, Protocol
 
 from bson import ObjectId
@@ -41,7 +42,15 @@ class BudgetRepository(Protocol):
     async def create_transaction(self, user_id: str, transaction: TransactionCreate) -> dict[str, Any]: ...
     async def get_transactions(self, user_id: str, limit: int = 50) -> list[dict[str, Any]]: ...
     async def delete_transaction(self, user_id: str, category: str | None = None, merchant: str | None = None) -> bool: ...
-    async def update_transaction(self, user_id: str, amount: float | None = None, category: str | None = None, merchant: str | None = None) -> bool: ...
+    async def update_transaction(
+        self,
+        user_id: str,
+        amount: float | None = None,
+        category: str | None = None,
+        merchant: str | None = None,
+        match_category: str | None = None,
+        match_merchant: str | None = None,
+    ) -> bool: ...
     async def analytics_summary(self, user_id: str) -> dict[str, Any]: ...
 
 
@@ -181,9 +190,9 @@ class MongoBudgetRepository:
     async def delete_transaction(self, user_id: str, category: str | None = None, merchant: str | None = None) -> bool:
         query = {"user_id": ObjectId(user_id)}
         if category:
-            query["category"] = re.compile(f"^{category}$", re.IGNORECASE)
+            query["category"] = re.compile(f"^{re.escape(category)}$", re.IGNORECASE)
         if merchant:
-            query["merchant"] = re.compile(f"^{merchant}$", re.IGNORECASE)
+            query["merchant"] = re.compile(f"^{re.escape(merchant)}$", re.IGNORECASE)
         
         doc = await self.db.transactions.find_one(query, sort=[("date", -1)])
         if not doc:
@@ -191,8 +200,22 @@ class MongoBudgetRepository:
         res = await self.db.transactions.delete_one({"_id": doc["_id"]})
         return res.deleted_count > 0
 
-    async def update_transaction(self, user_id: str, amount: float | None = None, category: str | None = None, merchant: str | None = None) -> bool:
-        doc = await self.db.transactions.find_one({"user_id": ObjectId(user_id)}, sort=[("date", -1)])
+    async def update_transaction(
+        self,
+        user_id: str,
+        amount: float | None = None,
+        category: str | None = None,
+        merchant: str | None = None,
+        match_category: str | None = None,
+        match_merchant: str | None = None,
+    ) -> bool:
+        query = {"user_id": ObjectId(user_id)}
+        if match_category:
+            query["category"] = re.compile(f"^{re.escape(match_category)}$", re.IGNORECASE)
+        if match_merchant:
+            query["merchant"] = re.compile(f"^{re.escape(match_merchant)}$", re.IGNORECASE)
+
+        doc = await self.db.transactions.find_one(query, sort=[("date", -1)])
         if not doc:
             return False
         

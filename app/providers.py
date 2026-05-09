@@ -70,6 +70,13 @@ def clean_model_text(raw_text: str) -> str:
         marker = "</think>"
         if marker in text.lower():
             text = text[text.lower().find(marker) + len(marker) :].strip()
+        else:
+            text = re.sub(r"^<think>\s*", "", text, flags=re.IGNORECASE).strip()
+            paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
+            text = paragraphs[-1] if len(paragraphs) > 1 else ""
+    text = re.sub(r"</?think>", "", text, flags=re.IGNORECASE).strip()
+    if not text:
+        return "I can help with that. Could you rephrase it once more?"
     return text
 
 

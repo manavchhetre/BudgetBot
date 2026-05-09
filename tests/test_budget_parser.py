@@ -74,3 +74,7 @@ def test_provider_json_parser_handles_thinking_noise():
 
     assert parse_json_response(raw)["intent"] == "analytics_query"
     assert clean_model_text("<think>private</think>\nVisible answer") == "Visible answer"
+
+
+def test_provider_text_cleaner_drops_unclosed_thinking_noise():
+    assert "<think>" not in clean_model_text("<think>\nprivate notes")

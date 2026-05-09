@@ -15,6 +15,7 @@ class InMemoryBudgetRepository(BudgetRepository):
         self.conversations: dict[str, dict[str, Any]] = {}
         self.messages: dict[str, dict[str, Any]] = {}
         self.transactions: dict[str, dict[str, Any]] = {}
+        self.budgets: dict[str, dict[str, Any]] = {}
 
     async def ensure_indexes(self) -> None:
         return None
@@ -27,6 +28,9 @@ class InMemoryBudgetRepository(BudgetRepository):
             "name": name,
             "email": email.lower(),
             "password_hash": password_hash,
+            "avatar": "",
+            "monthly_income": 0.0,
+            "user_summary": "",
             "created_at": datetime.now(UTC),
         }
         self.users[user["id"]] = user
@@ -41,6 +45,26 @@ class InMemoryBudgetRepository(BudgetRepository):
     async def get_user_by_id(self, user_id: str) -> dict[str, Any] | None:
         user = self.users.get(user_id)
         return dict(user) if user else None
+
+    async def update_user_profile(
+        self,
+        user_id: str,
+        name: str | None = None,
+        avatar: str | None = None,
+        monthly_income: float | None = None,
+        user_summary: str | None = None,
+    ) -> None:
+        user = self.users.get(user_id)
+        if not user:
+            return
+        if name is not None:
+            user["name"] = name
+        if avatar is not None:
+            user["avatar"] = avatar
+        if monthly_income is not None:
+            user["monthly_income"] = monthly_income
+        if user_summary is not None:
+            user["user_summary"] = user_summary
 
     async def create_conversation(self, user_id: str, title: str) -> dict[str, Any]:
         now = datetime.now(UTC)
@@ -100,8 +124,69 @@ class InMemoryBudgetRepository(BudgetRepository):
         rows = [item for item in self.transactions.values() if item["user_id"] == user_id]
         return [dict(item) for item in sorted(rows, key=lambda row: row["date"], reverse=True)][:limit]
 
+    async def set_category_budget(self, user_id: str, category: str, limit_amount: float) -> dict[str, Any]:
+        budget = {
+            "id": f"{user_id}:{category.strip().lower()}",
+            "user_id": user_id,
+            "category": category.strip(),
+            "limit_amount": limit_amount,
+            "updated_at": datetime.now(UTC),
+        }
+        self.budgets[budget["id"]] = budget
+        return dict(budget)
+
+    async def get_category_budgets(self, user_id: str) -> list[dict[str, Any]]:
+        budgets = getattr(self, "budgets", {})
+        return [dict(item) for item in budgets.values() if item["user_id"] == user_id]
+
+    async def delete_category_budget(self, user_id: str, category: str) -> bool:
+        budget_id = f"{user_id}:{category.strip().lower()}"
+        budgets = getattr(self, "budgets", {})
+        return budgets.pop(budget_id, None) is not None
+
+    async def delete_transaction(self, user_id: str, category: str | None = None, merchant: str | None = None) -> bool:
+        rows = await self.get_transactions(user_id, limit=500)
+        for row in rows:
+            if category and row.get("category", "").lower() != category.lower():
+                continue
+            if merchant and row.get("merchant", "").lower() != merchant.lower():
+                continue
+            self.transactions.pop(row["id"], None)
+            return True
+        return False
+
+    async def update_transaction(
+        self,
+        user_id: str,
+        amount: float | None = None,
+        category: str | None = None,
+        merchant: str | None = None,
+        match_category: str | None = None,
+        match_merchant: str | None = None,
+    ) -> bool:
+        rows = await self.get_transactions(user_id, limit=500)
+        for row in rows:
+            if match_category and row.get("category", "").lower() != match_category.lower():
+                continue
+            if match_merchant and row.get("merchant", "").lower() != match_merchant.lower():
+                continue
+            updates: dict[str, Any] = {}
+            if amount is not None:
+                updates["amount"] = amount
+            if category is not None:
+                updates["category"] = category
+            if merchant is not None:
+                updates["merchant"] = merchant
+            if not updates:
+                return False
+            self.transactions[row["id"]].update(updates)
+            return True
+        return False
+
     async def analytics_summary(self, user_id: str) -> dict[str, Any]:
         transactions = await self.get_transactions(user_id, limit=500)
+        user = await self.get_user_by_id(user_id)
+        monthly_income = user.get("monthly_income") if user else None
         total_spend = sum(float(item["amount"]) for item in transactions)
         category_totals: defaultdict[str, float] = defaultdict(float)
         merchant_totals: defaultdict[str, float] = defaultdict(float)
@@ -112,8 +197,21 @@ class InMemoryBudgetRepository(BudgetRepository):
             merchant_totals[item.get("merchant") or "Unknown"] += float(item["amount"])
             daily_totals[item["date"].strftime("%Y-%m-%d")] += float(item["amount"])
             monthly_totals[item["date"].strftime("%Y-%m")] += float(item["amount"])
+        current_month = datetime.now(UTC).strftime("%Y-%m")
+        remaining_budget = (monthly_income - monthly_totals[current_month]) if monthly_income else None
+        budget_tracking = []
+        for budget in await self.get_category_budgets(user_id):
+            spent = category_totals[budget["category"]]
+            budget_tracking.append({
+                "category": budget["category"],
+                "limit_amount": budget["limit_amount"],
+                "spent_amount": spent,
+                "remaining_amount": max(0.0, budget["limit_amount"] - spent),
+            })
         return {
             "total_spend": total_spend,
+            "monthly_income": monthly_income,
+            "remaining_budget": remaining_budget,
             "transaction_count": len(transactions),
             "top_category": max(category_totals, key=category_totals.get) if category_totals else None,
             "top_merchant": max(merchant_totals, key=merchant_totals.get) if merchant_totals else None,
@@ -122,6 +220,7 @@ class InMemoryBudgetRepository(BudgetRepository):
                 for key, value in sorted(category_totals.items(), key=lambda pair: pair[1], reverse=True)
             ],
             "daily_breakdown": [{"date": key, "amount": daily_totals[key]} for key in sorted(daily_totals, reverse=True)],
+            "budget_tracking": budget_tracking,
             "monthly_trend": [{"month": key, "amount": monthly_totals[key]} for key in sorted(monthly_totals)],
             "recent_transactions": transactions[:8],
         }
