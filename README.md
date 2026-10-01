@@ -41,3 +41,5 @@ The `uat` branch is configured in Jenkins as `BudgetBot-CI`. Jenkins polls the
 GitHub branch once per minute and runs the test suite from `Jenkinsfile` after
 it detects a new commit. This polling setup is intended for the local Jenkins
 pilot; a reachable Jenkins server can use a GitHub webhook for faster builds.
+Open the `BudgetBot-CI` job in Jenkins to view its build history and individual
+test results; the job retains the 30 most recent runs.
