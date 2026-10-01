@@ -34,3 +34,10 @@ Open `http://127.0.0.1:8000`.
 ```powershell
 pytest
 ```
+
+## Jenkins CI
+
+The `uat` branch is configured in Jenkins as `BudgetBot-CI`. Jenkins polls the
+GitHub branch once per minute and runs the test suite from `Jenkinsfile` after
+it detects a new commit. This polling setup is intended for the local Jenkins
+pilot; a reachable Jenkins server can use a GitHub webhook for faster builds.
